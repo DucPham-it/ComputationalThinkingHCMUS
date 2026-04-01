@@ -105,7 +105,7 @@ services/geocoding_service.py
 services/weather_service.py
 
 
-# 4. AI — RECOMMENDATION ENGINE: Minh Trí
+# 4. AI — RECOMMENDATION ENGINE:
 
 ## AI1 — Recommendation System
 

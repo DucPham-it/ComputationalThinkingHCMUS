@@ -1,72 +1,58 @@
 ```mermaid
 flowchart TD
-    U[User] --> FE[Frontend React]
+    A[frontend/src/main.jsx] --> B[frontend/src/App.jsx]
+    B --> C[frontend/src/routes/AppRoutes.jsx]
 
-    subgraph FRONTEND
-        FE1[Home Page]
-        FE2[Place Detail Page]
-        FE3[Review Page]
-        FE4[Map View]
-        FE5[Route View]
-        FE6[Common UI Components]
-    end
+    C --> D1[pages/Home.jsx]
+    C --> D2[pages/PlaceDetail.jsx]
+    C --> D3[pages/ReviewPage.jsx]
+    C --> D4[pages/MapView.jsx]
+    C --> D5[pages/RouteView.jsx]
+    C --> D6[pages/Favorites.jsx]
+    C --> D7[pages/Login.jsx]
+    C --> D8[pages/Register.jsx]
 
-    FE --> FE1
-    FE --> FE2
-    FE --> FE3
-    FE --> FE4
-    FE --> FE5
-    FE --> FE6
+    D1 --> E1[placeService.fetchRecommendations]
+    D2 --> E2[placeService.fetchPlaceDetail]
+    D3 --> E3[reviewService.fetchReviews]
+    D3 --> E4[reviewService.createReview]
+    D5 --> E5[routeService.getRoute]
+    D6 --> E6[favoriteService.fetchFavorites]
+    D7 --> E7[authService.login]
+    D8 --> E8[authService.register]
 
-    FE --> API[Backend FastAPI]
+    E1 --> F1[api/routes/recommendations.py:get_recommendations]
+    E2 --> F2[api/routes/places.py:get_place_detail]
+    E3 --> F3[api/routes/reviews.py:list_reviews]
+    E4 --> F4[api/routes/reviews.py:create_review]
+    E5 --> F5[api/routes/routes.py:plan_route]
+    E6 --> F6[api/routes/favorites.py:list_favorites]
+    E7 --> F7[api/routes/auth.py:login]
+    E8 --> F8[api/routes/auth.py:register]
 
-    subgraph BACKEND
-        R1[Places API]
-        R2[Reviews API]
-        R3[Favorites API]
-        R4[Recommendation API]
+    F1 --> G1[recommendation/nlp_parser.py:parse_search_text]
+    F1 --> G2[recommendation/recommender.py:recommend_places]
 
-        S1[Google Places Service]
-        S2[Directions Service]
-        S3[Geocoding Service]
-        S4[Weather Service]
+    G2 --> H1[services/google_places_service.py:search_places]
+    G2 --> H2[services/directions_service.py:get_directions]
+    G2 --> H3[services/weather_service.py:get_weather_summary]
+    G2 --> H4[recommendation/filters.py:apply_filters]
+    G2 --> H5[recommendation/ranking.py:rank_places]
 
-        A1[NLP Parser]
-        A2[Filters]
-        A3[Ranking]
-        A4[Recommender]
+    H5 --> I1[recommendation/ranking.py:compute_score]
+    H5 --> I2[recommendation/weather_logic.py:weather_bonus]
 
-        DBR[Repositories]
-        DBS[(SQL Server)]
-    end
+    H4 --> I3[utils/distance.py:haversine_km]
 
-    API --> R1
-    API --> R2
-    API --> R3
-    API --> R4
+    F2 --> J1[repositories/place_repo.py]
+    F3 --> J2[repositories/review_repo.py]
+    F4 --> J2
+    F6 --> J3[repositories/favorite_repo.py]
+    F7 --> J4[repositories/user_repo.py]
+    F8 --> J4
 
-    R1 --> S1
-    R1 --> S3
-    R1 --> DBR
-
-    R2 --> DBR
-    R3 --> DBR
-
-    R4 --> A1
-    R4 --> A2
-    R4 --> A3
-    R4 --> A4
-
-    A4 --> S1
-    A4 --> S2
-    A4 --> S3
-    A4 --> S4
-    A4 --> DBR
-
-    DBR --> DBS
-
-    S1 --> GMP[Google Maps Platform]
-    S2 --> GMP
-    S3 --> GMP
-    S4 --> WAPI[Weather API]
+    J1 --> K[SQL Server]
+    J2 --> K
+    J3 --> K
+    J4 --> K
 ```

@@ -6,6 +6,9 @@ import api from "./api";
  */
 export async function login(payload) {
   const response = await api.post("/auth/login", payload);
+  if (response.data?.access_token) {
+    window.localStorage.setItem("access_token", response.data.access_token);
+  }
   return response.data;
 }
 
@@ -15,5 +18,8 @@ export async function login(payload) {
  */
 export async function register(payload) {
   const response = await api.post("/auth/register", payload);
+  if (response.data?.access_token) {
+    window.localStorage.setItem("access_token", response.data.access_token);
+  }
   return response.data;
 }

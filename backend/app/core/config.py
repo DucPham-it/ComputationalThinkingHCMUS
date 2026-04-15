@@ -7,6 +7,7 @@ Output:
 - strongly typed settings object used across backend layers
 """
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +24,14 @@ class Settings(BaseSettings):
     app_port: int = 8000
     google_maps_api_key: str = ""
     weather_api_key: str = ""
+    database_url: str = Field(
+        default="sqlite:///placeholder.db",
+        validation_alias=AliasChoices("DATABASE_URL", "SUPABASE_DB_URL"),
+    )
+    database_ssl_require: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("DATABASE_SSL_REQUIRE", "DB_SSL_REQUIRE"),
+    )
     db_host: str = "localhost"
     db_port: int = 1433
     db_name: str = "TravelAppDB"

@@ -18,6 +18,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import auth, favorites, places, recommendations, reviews, routes, weather
 from app.core.config import settings
+from app.db.connection import check_database_connection
+from app.db.session import engine
 
 app = FastAPI(title=settings.app_name)
 
@@ -48,4 +50,9 @@ def health_check() -> dict[str, str]:
     Output:
     - dict with backend status
     """
-    return {"status": "ok"}
+    database_ok, database_message = check_database_connection(engine)
+    return {
+        "status": "ok",
+        "database": "connected" if database_ok else f"error: {database_message}",
+        "driver": engine.url.drivername,
+    }

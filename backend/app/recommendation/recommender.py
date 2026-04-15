@@ -11,6 +11,8 @@ Pipeline idea:
 
 from typing import Any
 
+from sqlalchemy.orm import Session
+
 from app.recommendation.filters import apply_filters
 from app.recommendation.nlp_parser import parse_search_text
 from app.recommendation.ranking import rank_places
@@ -18,7 +20,12 @@ from app.services.google_places_service import search_places
 
 
 
-def recommend_places(query: str = "") -> list[dict[str, Any]]:
+def recommend_places(
+    query: str = "",
+    latitude: float | None = None,
+    longitude: float | None = None,
+    db: Session | None = None,
+) -> list[dict[str, Any]]:
     """Generate recommendation list.
 
     Input:
@@ -33,7 +40,7 @@ def recommend_places(query: str = "") -> list[dict[str, Any]]:
     - incorporate weather and special festival data
     """
     parsed = parse_search_text(query)
-    places = search_places(query=query)
+    places = search_places(query=query, latitude=latitude, longitude=longitude, db=db)
     filtered = apply_filters(
         places=places,
         allowed_types=[parsed["entertainment_type"]] if parsed.get("entertainment_type") else None,

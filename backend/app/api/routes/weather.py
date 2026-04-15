@@ -6,7 +6,11 @@ router = APIRouter()
 
 
 @router.get("")
-def get_weather(city: str = "") -> dict:
+def get_weather(
+    city: str = "",
+    latitude: float | None = None,
+    longitude: float | None = None,
+) -> dict:
     """Return normalized weather data.
 
     Input:
@@ -15,4 +19,4 @@ def get_weather(city: str = "") -> dict:
     Output:
     - weather condition summary for recommendation layer or UI
     """
-    return get_weather_summary(city=city)
+    return get_weather_summary(city=city, latitude=latitude, longitude=longitude)

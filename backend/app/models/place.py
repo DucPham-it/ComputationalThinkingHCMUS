@@ -12,7 +12,6 @@ class Place:
 
     Minimum fields already defined.
     TODO later:
-    - external_place_id
     - latitude, longitude
     - price_level
     - open_now
@@ -25,4 +24,12 @@ class Place:
     id: int
     name: str
     address: str
+    external_place_id: str | None = None
     rating: float | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    price_level: int | None = None
+    open_now: bool | None = None
+    photo_url: str | None = None
+    contact_phone: str | None = None
+    primary_type: str | None = None

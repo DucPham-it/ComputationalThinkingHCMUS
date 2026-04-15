@@ -1,18 +1,29 @@
 """Database session management.
 
 Current state:
-- placeholder SQLite engine so project can start without full SQL Server wiring
+- use SQLAlchemy sessions against the configured database URL
 
-Target state:
-- replace with SQL Server engine using SQLAlchemy + pyodbc
-- expose `get_db()` dependency for FastAPI routes
+Supported databases:
+- Supabase / PostgreSQL through `DATABASE_URL`
+- SQLite fallback for local placeholder runs
 """
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
-# TODO: replace with SQL Server URI once pyodbc integration is finalized.
-engine = create_engine("sqlite:///placeholder.db", echo=False)
+from app.db.connection import build_database_url
+
+database_url = build_database_url()
+engine_options: dict = {"echo": False, "pool_pre_ping": True}
+
+if database_url.startswith("sqlite"):
+    engine_options["connect_args"] = {"check_same_thread": False}
+else:
+    # Supabase already manages Postgres connections; avoid long-lived stale pools.
+    engine_options["poolclass"] = NullPool
+
+engine = create_engine(database_url, **engine_options)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
@@ -25,7 +36,7 @@ def get_db():
 
     TODO:
     - ensure session commits/rollbacks are handled centrally
-    - migrate engine from SQLite placeholder to SQL Server
+    - wire repositories and routes to use the shared session
     """
     db = SessionLocal()
     try:

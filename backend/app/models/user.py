@@ -12,10 +12,12 @@ class User:
 
     Fields:
     - id: internal user identifier
+    - user_name: display name derived from registration input or email
     - email: account email used for login
     - password_hash: hashed password stored in database
     """
 
     id: int
+    user_name: str
     email: str
     password_hash: str

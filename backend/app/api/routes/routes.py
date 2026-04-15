@@ -7,7 +7,7 @@ router = APIRouter()
 
 
 @router.get("/plan", response_model=RouteResponse)
-def plan_route(origin: str = "", destination: str = "") -> RouteResponse:
+def plan_route(origin: str = "", destination: str = "", travel_mode: str = "driving") -> RouteResponse:
     """Plan route between origin and destination.
 
     Input:
@@ -17,7 +17,7 @@ def plan_route(origin: str = "", destination: str = "") -> RouteResponse:
     Output:
     - distance, duration, polyline, and route steps
     """
-    data = get_directions(origin=origin, destination=destination)
+    data = get_directions(origin=origin, destination=destination, travel_mode=travel_mode)
     return RouteResponse(
         origin=data["origin"],
         destination=data["destination"],

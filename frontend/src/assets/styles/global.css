@@ -1,76 +1,188 @@
+@import "./components.css";
+@import "./animations.css";
+
+/* Khai báo màu sắc và kích thước dùng chung toàn app. */
 :root {
-  font-family: Arial, sans-serif;
-  color: #111827;
-  background: #f9fafb;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+    --color-primary: #2563eb;       
+    --color-primary-soft: #eff6ff;  
+    --color-primary-dark: #1d4ed8;  
+    --color-accent: #f59e0b;        
+    
+    --color-bg: #f8fafc;            
+    --color-bg-soft: #f1f5f9;       
+    --color-card: rgba(255, 255, 255, 0.7); 
+    
+    --color-text: #0f172a;          
+    --color-text-soft: #475569;     
+    --color-muted: #94a3b8;         
+    --color-border: rgba(226, 232, 240, 0.6);        
+
+    /* Khoảng cách và cỡ chữ tự động co giãn. */
+    --space-sm: clamp(0.5rem, 1vw, 0.75rem);   
+    --space-md: clamp(1rem, 2vw, 1.5rem);      
+    --space-lg: clamp(1.5rem, 3vw, 2.5rem);    
+    
+    --radius-sm: 12px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-xl: 32px;
+    --radius: var(--radius-md); 
+
+    /* Đổ bóng nhiều lớp tạo cảm giác nổi 3D. */
+    --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 16px 32px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.04);
+    --shadow-float: 0 24px 48px rgba(37, 99, 235, 0.08), 0 8px 16px rgba(37, 99, 235, 0.04);
 }
 
+/* Reset CSS cơ bản và làm mượt thao tác cuộn. */
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    scroll-behavior: smooth; 
+    -webkit-tap-highlight-color: transparent; 
 }
 
 body {
-  margin: 0;
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    background: var(--color-bg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
+/* Đổi màu nền khi bôi đen đoạn văn bản. */
+::selection {
+    background-color: var(--color-primary-soft);
+    color: var(--color-primary-dark);
+}
+
+/* Làm nhỏ thanh cuộn hệ thống cho gọn gàng. */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-muted);
+    border-radius: 12px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-soft);
+}
+
+/* Bỏ gạch chân link, chỉnh khoảng cách chữ tiêu đề. */
 a {
-  color: inherit;
-  text-decoration: none;
+    color: inherit;
+    text-decoration: none;
 }
 
+h1, h2, h3, h4, h5, h6 {
+    color: var(--color-text);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em; 
+}
+
+/* Tiêu đề tự thu nhỏ lại trên màn hình điện thoại. */
+h1 { font-size: clamp(2rem, 4vw, 2.75rem); margin-bottom: 0.75rem; font-weight: 800; }
+h2 { font-size: clamp(1.5rem, 3vw, 2rem); margin-bottom: 0.75rem; }
+h3 { font-size: clamp(1.25rem, 2vw, 1.5rem); margin-bottom: 0.5rem; }
+p { margin-bottom: 1rem; color: var(--color-text-soft); }
+
+/* Khung chứa nội dung an toàn, tối đa 1200px. */
 .container {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-.card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.grid {
-  display: grid;
-  gap: 16px;
-}
-
-.grid-3 {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-}
-
-.navbar,
-.footer {
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 16px 24px;
-}
-
-.footer {
-  border-top: 1px solid #e5e7eb;
-  border-bottom: none;
-  margin-top: 32px;
-}
-
-button {
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  cursor: pointer;
-}
-
-input,
-select,
-textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--space-md); 
 }
 
 .row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Lưới tự động rớt dòng khi hết chỗ trống. */
+.grid {
+    display: grid;
+    gap: var(--space-lg);
+}
+
+.grid-3 {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+section {
+    margin-bottom: clamp(32px, 5vw, 64px);
+}
+
+/* Thẻ nội dung có hiệu ứng nền kính mờ. */
+.card {
+    background: var(--color-card);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Reset định dạng gốc của nút bấm. */
+button {
+    font-family: inherit;
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Khung nhập liệu bo góc to, rộng rãi. */
+input, select, textarea {
+    font-family: inherit;
+    width: 100%;
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.9);
+    font-size: 1rem;
+    color: var(--color-text);
+    transition: all 0.2s ease;
+}
+
+/* Đổi màu viền và sáng lên khi đang gõ. */
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    background: white;
+    box-shadow: 0 0 0 4px var(--color-primary-soft);
+}
+
+input::placeholder, textarea::placeholder {
+    color: var(--color-muted);
 }

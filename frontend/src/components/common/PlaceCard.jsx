@@ -21,7 +21,7 @@ export default function PlaceCard({ place }) {
     const navigate = useNavigate();
 
     function handleClick() {
-        navigate(`/place/${place.id}`);
+        navigate(`/places/${place.id}`);
     }
 
     // Xử lý logic hiển thị màu sắc cho trạng thái Đóng/Mở cửa

@@ -39,8 +39,13 @@ export default function MapView({ places = [] }) {
 
     // when select a place
     const handlePlaceSelect = (place) => {
+        const lat = place.lat ?? place.latitude;
+        const lng = place.lng ?? place.longitude;
+
         setSelectedPlace(place);
-        setMapCenter({ lat: place.lat, lng: place.lng });
+        if (lat != null && lng != null) {
+            setMapCenter({ lat, lng });
+        }
     };
 
     return (

@@ -20,6 +20,7 @@ export default function AppRoutes() {
       <Route path="/places/:id" element={<PlaceDetail />} />
       <Route path="/map" element={<MapView />} />
       <Route path="/reviews" element={<ReviewPage />} />
+      <Route path="/reviews/:placeId" element={<ReviewPage />} />
       <Route path="/route" element={<RouteView />} />
       <Route path="/favorites" element={<Favorites />} />
       <Route path="/login" element={<Login />} />

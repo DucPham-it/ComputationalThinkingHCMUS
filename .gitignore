@@ -94,3 +94,5 @@ node_modules/
 # Do not ignore SQL migration files
 
 # database/migrations/*.sql
+
+.codex

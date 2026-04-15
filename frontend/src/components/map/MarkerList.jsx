@@ -68,64 +68,73 @@ export default function MarkerList({ places = [], onPlaceSelect }) { //onPlaceSe
 
     return (
         <>
-            {places.map((place) => (
-                <Marker
-                    key={place.id}
-                    position={{ lat: place.lat, lng: place.lng }}
-                    onClick={() => handleMarkerClick(place)}
-                    icon={selected?.id === place.id ? selectedMarkerIcon : markerIcon} // Change the icon based on state: green if selected, red if default
-                    animation={selected?.id === place.id ? 1 : undefined} // Animation bounce when marker is selected
-                    title={place.name}
-                >
-                    {selected?.id === place.id && (
-                        <InfoWindow
-                            onCloseClick={handleCloseClick}
-                            options={{ maxWidth: 250 }}
-                        >
-                            <div style={{ padding: "8px", minWidth: "150px" }}>
-                                <h3 style={{
-                                    margin: "0 0 8px 0",
-                                    fontSize: "16px",
-                                    fontWeight: "600",
-                                    color: "#1a1a1a"
-                                }}>
-                                    {place.name}
-                                </h3>
-                                { /* Rating and distance — only show if data is available */ }
-                                <div style={{
-                                    display: "flex",
-                                    gap: "12px",
-                                    fontSize: "14px",
-                                    color: "#666"
-                                }}>
-                                    { /* Only render if place.rating exists (not null/undefined/0) */ }
-                                    {place.rating && (
-                                        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                            <StarIcon />
-                                            {place.rating}
-                                        </span>
-                                    )}
-                                    {place.distance_km && (
-                                        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                            <LocationIcon />
-                                            {place.distance_km} km
-                                        </span>
+            {places.map((place) => {
+                const lat = place.lat ?? place.latitude;
+                const lng = place.lng ?? place.longitude;
+
+                if (lat == null || lng == null) {
+                    return null;
+                }
+
+                return (
+                    <Marker
+                        key={place.id}
+                        position={{ lat, lng }}
+                        onClick={() => handleMarkerClick(place)}
+                        icon={selected?.id === place.id ? selectedMarkerIcon : markerIcon} // Change the icon based on state: green if selected, red if default
+                        animation={selected?.id === place.id ? 1 : undefined} // Animation bounce when marker is selected
+                        title={place.name}
+                    >
+                        {selected?.id === place.id && (
+                            <InfoWindow
+                                onCloseClick={handleCloseClick}
+                                options={{ maxWidth: 250 }}
+                            >
+                                <div style={{ padding: "8px", minWidth: "150px" }}>
+                                    <h3 style={{
+                                        margin: "0 0 8px 0",
+                                        fontSize: "16px",
+                                        fontWeight: "600",
+                                        color: "#1a1a1a"
+                                    }}>
+                                        {place.name}
+                                    </h3>
+                                    { /* Rating and distance — only show if data is available */ }
+                                    <div style={{
+                                        display: "flex",
+                                        gap: "12px",
+                                        fontSize: "14px",
+                                        color: "#666"
+                                    }}>
+                                        { /* Only render if place.rating exists (not null/undefined/0) */ }
+                                        {place.rating && (
+                                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                                <StarIcon />
+                                                {place.rating}
+                                            </span>
+                                        )}
+                                        {place.distance_km && (
+                                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                                <LocationIcon />
+                                                {place.distance_km} km
+                                            </span>
+                                        )}
+                                    </div>
+                                    {place.address && (
+                                        <p style={{
+                                            margin: "8px 0 0 0",
+                                            fontSize: "12px",
+                                            color: "#888"
+                                        }}>
+                                            {place.address}
+                                        </p>
                                     )}
                                 </div>
-                                {place.address && (
-                                    <p style={{
-                                        margin: "8px 0 0 0",
-                                        fontSize: "12px",
-                                        color: "#888"
-                                    }}>
-                                        {place.address}
-                                    </p>
-                                )}
-                            </div>
-                        </InfoWindow>
-                    )}
-                </Marker>
-            ))}
+                            </InfoWindow>
+                        )}
+                    </Marker>
+                );
+            })}
         </>
     );
 }

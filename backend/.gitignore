@@ -1,5 +1,8 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv311/
 .env
 .pytest_cache/
+node_modules/
+.venv311/

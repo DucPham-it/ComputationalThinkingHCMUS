@@ -1,0 +1,169 @@
+/* ==========================================================================
+   CSS VARIABLES FOR ANIMATIONS (Biến cấu hình chuyển động)
+   ========================================================================== */
+:root {
+    /* Đường cong chuyển động tự nhiên, tạo cảm giác mượt mà và cao cấp */
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* Hiệu ứng nảy nhẹ (bouncy) */
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);   /* Nhanh lúc đầu, chậm dần về cuối */
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);    /* Chuyển động đều đặn, tự nhiên */
+}
+
+/* ==========================================================================
+   SPINNER (Hiệu ứng xoay cho trạng thái Loading)
+   ========================================================================== */
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Biến thể xoay chậm cho các icon trang trí (ví dụ: la bàn) */
+.spin-slow {
+    animation: spin 3s linear infinite;
+}
+
+/* ==========================================================================
+   FADE & SLIDE IN (Hiệu ứng xuất hiện mượt mà)
+   Dùng cho Cards, Modals, Section Content
+   ========================================================================== */
+
+/* Fade In kèm hiệu ứng trượt nhẹ từ dưới lên (Slide Up) */
+.fade-in {
+    /* Sử dụng forwards để giữ nguyên trạng thái ở frame cuối cùng (opacity: 1) */
+    animation: fadeIn 0.5s var(--ease-out-expo) forwards;
+    /* Tối ưu hóa phần cứng (Hardware Acceleration) */
+    will-change: opacity, transform;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* STAGGERED DELAYS (Hiệu ứng xuất hiện lần lượt)
+   Dùng cho danh sách (Recommendation List) để các Card không hiện lên cùng 1 lúc 
+*/
+.fade-in-delay-1 { animation: fadeIn 0.5s var(--ease-out-expo) forwards 0.05s; opacity: 0; }
+.fade-in-delay-2 { animation: fadeIn 0.5s var(--ease-out-expo) forwards 0.1s; opacity: 0; }
+.fade-in-delay-3 { animation: fadeIn 0.5s var(--ease-out-expo) forwards 0.15s; opacity: 0; }
+.fade-in-delay-4 { animation: fadeIn 0.5s var(--ease-out-expo) forwards 0.2s; opacity: 0; }
+.fade-in-delay-5 { animation: fadeIn 0.5s var(--ease-out-expo) forwards 0.25s; opacity: 0; }
+
+/* ==========================================================================
+   SCALE IN (Xuất hiện và phóng to dần)
+   Dùng cho Popover, Tooltip, hoặc Modal
+   ========================================================================== */
+
+.scale-in {
+    animation: scaleIn 0.4s var(--ease-spring) forwards;
+    will-change: opacity, transform;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.92) translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* ==========================================================================
+   INTERACTIVE UTILITIES (Các utility class hỗ trợ tương tác chuột)
+   ========================================================================== */
+
+/* Hiệu ứng lún xuống khi click (Bấm nút, bấm card) */
+.press {
+    transition: transform 0.15s var(--ease-standard);
+}
+
+.press:active {
+    transform: scale(0.96) !important;
+}
+
+/* Hiệu ứng nổi bật khi hover chuột vào thẻ Card */
+.hover-lift {
+    transition: transform 0.3s var(--ease-out-expo), box-shadow 0.3s var(--ease-out-expo);
+}
+
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 28px -8px rgba(0, 0, 0, 0.12);
+}
+
+/* ==========================================================================
+   SKELETON / SHIMMER LOADING (Hiệu ứng tải dữ liệu cao cấp)
+   Tạo cảm giác mượt mà hơn so với spinner xoay vòng truyền thống
+   ========================================================================== */
+
+.shimmer {
+    position: relative;
+    overflow: hidden;
+    background-color: #f1f5f9; /* Thay đổi màu nền dịu hơn (Tailwind slate-100) */
+    border-radius: inherit; /* Tự động bo góc theo phần tử cha */
+}
+
+.shimmer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    /* Hiệu ứng ánh sáng lướt qua góc 90 độ, mờ dần ở 2 đầu */
+    background: linear-gradient(
+        90deg, 
+        rgba(255, 255, 255, 0) 0%, 
+        rgba(255, 255, 255, 0.6) 50%, 
+        rgba(255, 255, 255, 0) 100%
+    );
+    transform: translateX(-100%);
+    animation: shimmerMove 1.6s infinite var(--ease-standard);
+}
+
+@keyframes shimmerMove {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* ==========================================================================
+   ATTENTION SEEKERS (Hiệu ứng thu hút sự chú ý)
+   Dùng cho Marker trên bản đồ hoặc Badge "Mới/Nổi bật"
+   ========================================================================== */
+
+/* Pulse: Tỏa sáng nhẹ nhàng, nhịp nhàng */
+.pulse-soft {
+    animation: pulseSoft 2s infinite;
+}
+
+@keyframes pulseSoft {
+    0% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(37, 99, 235, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+    }
+}
+
+/* Float: Lơ lửng nhẹ trên không khí (Dùng cho hình ảnh minh họa trang chủ) */
+.float {
+    animation: floating 3s ease-in-out infinite;
+}
+
+@keyframes floating {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+    100% { transform: translateY(0px); }
+}

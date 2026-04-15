@@ -1,0 +1,183 @@
+/* =========================================
+   BUTTONS & CTA (Nút tương tác)
+   ========================================= */
+
+/* Nút chính: Đổ màu gradient và dập nổi 3D. */
+.btn-primary {
+    background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), var(--shadow-sm);
+    transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Nâng Y và tỏa bóng đổ khi hover. */
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 10px 20px -4px rgba(37, 99, 235, 0.5);
+}
+
+/* Scale nhỏ lại tạo cảm giác nhấn vật lý. */
+.btn-primary:active {
+    transform: scale(0.96);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Viền sáng bao quanh để hỗ trợ dùng phím Tab. */
+.btn-primary:focus-visible {
+    outline: 3px solid var(--color-primary-soft);
+    outline-offset: 2px;
+}
+
+/* Nút phụ: Nền trong suốt, viền mỏng tiệp màu. */
+.btn-outline {
+    background: transparent;
+    border: 1.5px solid var(--color-border);
+    color: var(--color-text);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover đổ nền xám nhạt để tách biệt nút chính. */
+.btn-outline:hover {
+    background: var(--color-bg-soft);
+    border-color: var(--color-text-soft);
+    transform: translateY(-1px);
+}
+
+/* =========================================
+   CARDS & SURFACES (Thẻ và Bề mặt)
+   ========================================= */
+
+/* Tiêu đề thẻ nhấn mạnh bằng font chữ đậm. */
+.card-title {
+    font-weight: 700;
+    font-size: 1.15rem;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+    transition: color 0.3s ease;
+}
+
+/* Chữ nội dung nhạt màu, giãn dòng cho thoáng. */
+.card-text {
+    color: var(--color-text-soft);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+/* Đổi màu tiêu đề khi user trỏ chuột vào thẻ. */
+.card:hover .card-title {
+    color: var(--color-primary);
+}
+
+/* Hiệu ứng kính mờ phân lớp (Glassmorphism). */
+.glass {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-top: 1px solid rgba(255, 255, 255, 0.8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* =========================================
+   SPOTLIGHT SEARCH (Thanh tìm kiếm)
+   ========================================= */
+
+/* Khung search nổi lên như một đảo (Island UI). */
+.search-bar {
+    display: flex;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 6px 6px 6px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Sáng viền và nhô lên khi click vào nhập liệu. */
+.search-bar:focus-within {
+    border-color: var(--color-primary);
+    background: #fff;
+    box-shadow: 0 0 0 4px var(--color-primary-soft), var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+/* Bỏ viền và nền của thẻ input mặc định. */
+.search-bar input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 1rem;
+    color: var(--color-text);
+    padding: 8px 0;
+}
+
+/* Khử viền xanh blue mặc định của trình duyệt. */
+.search-bar input:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* =========================================
+   NAVBAR & MENU (Điều hướng)
+   ========================================= */
+
+/* Flexbox bọc menu, tự rớt dòng mượt mà. */
+.navbar-inner {
+    display: flex;
+    flex-wrap: wrap; 
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Mở rộng vùng chạm (touch target) cho menu. */
+.nav-link {
+    position: relative;
+    padding: 8px 16px;
+    font-weight: 600;
+    color: var(--color-text-soft);
+    border-radius: 20px; 
+    transition: all 0.3s ease;
+}
+
+/* Thanh gạch chân màu xanh ẩn dưới mỗi menu. */
+.nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    width: 0;
+    height: 3px;
+    background: var(--color-primary);
+    border-radius: 4px;
+    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    transform: translateX(-50%);
+}
+
+/* Hover hiện khối xám bo tròn và đổi màu chữ. */
+.nav-link:hover {
+    color: var(--color-primary);
+    background: var(--color-bg-soft);
+}
+
+/* Gạch chân trượt rộng ra từ tâm khi hover. */
+.nav-link:hover::after,
+.nav-link.active-link::after {
+    width: calc(100% - 24px); 
+}
+
+/* Ép nút Hamburger dạt sát về góc bên phải. */
+.mobile-toggle {
+    margin-left: auto; 
+    display: none; 
+}
+
+/* Breakpoint ép ẩn menu ngang cho mobile. */
+@media (max-width: 768px) {
+    .nav-links { 
+        display: none !important; 
+    }
+    .mobile-toggle { 
+        display: flex !important; 
+    }
+}

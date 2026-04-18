@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import httpx
+import math
 
 from app.core.config import settings
 from app.services.maps_helper import strip_html_tags
+from app.utils.distance import haversine_km
 
 DIRECTIONS_ENDPOINT = "https://maps.googleapis.com/maps/api/directions/json"
 REQUEST_TIMEOUT_SECONDS = 10
@@ -20,7 +22,9 @@ def get_directions(origin: str, destination: str, travel_mode: str = "driving") 
         "origin": normalized_origin,
         "destination": normalized_destination,
         "distance_text": "0 km",
+        "distance_meters": 0,
         "duration_text": "0 mins",
+        "duration_seconds": 0,
         "polyline": "",
         "steps": [],
     }
@@ -65,7 +69,45 @@ def get_directions(origin: str, destination: str, travel_mode: str = "driving") 
         "origin": leg.get("start_address", normalized_origin),
         "destination": leg.get("end_address", normalized_destination),
         "distance_text": leg.get("distance", {}).get("text", "0 km"),
+        "distance_meters": int(leg.get("distance", {}).get("value", 0) or 0),
         "duration_text": leg.get("duration", {}).get("text", "0 mins"),
+        "duration_seconds": int(leg.get("duration", {}).get("value", 0) or 0),
         "polyline": route.get("overview_polyline", {}).get("points"),
         "steps": steps,
     }
+
+
+def get_route_distance_km(
+    origin_latitude: float | None,
+    origin_longitude: float | None,
+    destination_latitude: float | None,
+    destination_longitude: float | None,
+    travel_mode: str = "driving",
+) -> float | None:
+    """Return route distance in km, preferring driving distance over straight-line distance."""
+    if (
+        origin_latitude is None
+        or origin_longitude is None
+        or destination_latitude is None
+        or destination_longitude is None
+    ):
+        return None
+
+    route = get_directions(
+        origin=f"{origin_latitude},{origin_longitude}",
+        destination=f"{destination_latitude},{destination_longitude}",
+        travel_mode=travel_mode,
+    )
+    distance_meters = int(route.get("distance_meters") or 0)
+    if distance_meters > 0:
+        return round(distance_meters / 1000, 2)
+
+    straight_distance = haversine_km(
+        origin_latitude,
+        origin_longitude,
+        destination_latitude,
+        destination_longitude,
+    )
+    if math.isfinite(straight_distance):
+        return round(straight_distance, 2)
+    return None

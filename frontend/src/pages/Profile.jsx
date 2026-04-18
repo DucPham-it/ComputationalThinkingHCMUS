@@ -1,0 +1,172 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
+import { updateProfile as updateProfileRequest } from "../services/authService";
+
+const pageStyles = {
+  minHeight: "calc(100vh - 140px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "32px 16px"
+};
+
+const formStyles = {
+  width: "min(100%, 760px)",
+  display: "grid",
+  gap: "20px"
+};
+
+const gridStyles = {
+  display: "grid",
+  gap: "16px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
+};
+
+const labelStyles = {
+  display: "grid",
+  gap: "8px",
+  fontWeight: 600,
+  color: "var(--color-text)"
+};
+
+const statusStyles = {
+  padding: "12px 16px",
+  borderRadius: "12px",
+  textAlign: "center",
+  background: "rgba(239, 246, 255, 0.9)",
+  border: "1px solid rgba(37, 99, 235, 0.16)",
+  color: "var(--color-primary-dark)"
+};
+
+const submitStyles = {
+  width: "100%",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  fontSize: "1rem",
+  fontWeight: 700
+};
+
+function toOptionalValue(value) {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized : null;
+}
+
+export default function Profile() {
+  const navigate = useNavigate();
+  const { user, setUser } = useAuth();
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const token = window.localStorage.getItem("access_token");
+    if (!token) {
+      navigate("/login", { replace: true });
+    }
+  }, [navigate]);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      first_name: String(formData.get("first_name") || "").trim(),
+      last_name: String(formData.get("last_name") || "").trim(),
+      birth_date: String(formData.get("birth_date") || "").trim(),
+      gender: toOptionalValue(formData.get("gender")),
+      address: toOptionalValue(formData.get("address"))
+    };
+
+    try {
+      const auth = await updateProfileRequest(payload);
+      setUser(auth.user);
+      navigate("/");
+    } catch (requestError) {
+      setError(
+        requestError?.response?.data?.detail ||
+          "Profile update failed. Please check your information and try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <section style={pageStyles}>
+      <form className="card" style={formStyles} onSubmit={handleSubmit}>
+        <div>
+          <h1>Complete Profile</h1>
+          <p>
+            Finish your account with personal details. Gender and address are optional.
+          </p>
+        </div>
+
+        <div style={gridStyles}>
+          <label style={labelStyles}>
+            First Name
+            <input
+              name="first_name"
+              type="text"
+              placeholder="Nguyen"
+              autoComplete="given-name"
+              defaultValue={user?.first_name || ""}
+              required
+            />
+          </label>
+
+          <label style={labelStyles}>
+            Last Name
+            <input
+              name="last_name"
+              type="text"
+              placeholder="An"
+              autoComplete="family-name"
+              defaultValue={user?.last_name || ""}
+              required
+            />
+          </label>
+
+          <label style={labelStyles}>
+            Birth Day
+            <input
+              name="birth_date"
+              type="date"
+              autoComplete="bday"
+              defaultValue={user?.birth_date || ""}
+              required
+            />
+          </label>
+
+          <label style={labelStyles}>
+            Gender
+            <select name="gender" defaultValue={user?.gender || ""}>
+              <option value="">Prefer not to say</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+        </div>
+
+        <label style={labelStyles}>
+          Address
+          <textarea
+            name="address"
+            rows={3}
+            placeholder="123 Nguyen Trai, District 5, Ho Chi Minh City"
+            autoComplete="street-address"
+            defaultValue={user?.address || ""}
+          />
+        </label>
+
+        <button className="btn-primary" style={submitStyles} disabled={isSubmitting}>
+          {isSubmitting ? "Saving profile..." : "Save Profile"}
+        </button>
+
+        {error ? <div style={statusStyles}>{error}</div> : null}
+      </form>
+    </section>
+  );
+}

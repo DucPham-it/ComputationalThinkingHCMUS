@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from app.models.review import Review
@@ -84,3 +84,35 @@ class ReviewRepository:
         review_count = int(row["review_count"] or 0)
         average_rating = float(row["average_rating"]) if row["average_rating"] is not None else None
         return average_rating, review_count
+
+    def get_place_summaries(self, place_ids: list[int]) -> dict[int, dict[str, float | int | None]]:
+        """Return average rating and review count keyed by place id."""
+        if not place_ids:
+            return {}
+
+        rows = (
+            self.db.execute(
+                text(
+                    """
+                    SELECT place_id, AVG(rating) AS average_rating, COUNT(*) AS review_count
+                    FROM reviews
+                    WHERE place_id IN :place_ids
+                    GROUP BY place_id
+                    """
+                ).bindparams(bindparam("place_ids", expanding=True)),
+                {"place_ids": place_ids},
+            )
+            .mappings()
+            .all()
+        )
+
+        summaries: dict[int, dict[str, float | int | None]] = {}
+        for row in rows:
+            place_id = int(row["place_id"])
+            summaries[place_id] = {
+                "average_rating": (
+                    float(row["average_rating"]) if row["average_rating"] is not None else None
+                ),
+                "review_count": int(row["review_count"] or 0),
+            }
+        return summaries

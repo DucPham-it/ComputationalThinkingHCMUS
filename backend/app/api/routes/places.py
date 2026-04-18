@@ -1,13 +1,54 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.repositories.place_repo import PlaceRepository
 from app.repositories.review_repo import ReviewRepository
-from app.schemas.place_schema import PlaceDetailResponse
-from app.services.google_places_service import get_place_detail as get_google_place_detail
+from app.schemas.place_schema import PlaceDetailResponse, PlaceResponse, ResolvePlacePointRequest
+from app.services.google_places_service import (
+    get_place_detail as get_google_place_detail,
+    resolve_place_from_coordinates,
+)
 
 router = APIRouter()
+
+
+@router.post("/resolve-point", response_model=PlaceResponse)
+def resolve_point_to_place(
+    payload: ResolvePlacePointRequest,
+    db: Session = Depends(get_db),
+) -> PlaceResponse:
+    """Resolve a clicked map coordinate into a place that can be viewed and reviewed."""
+    item = resolve_place_from_coordinates(payload.latitude, payload.longitude, db=db)
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No place information was found for the selected point.",
+        )
+
+    average_rating, review_count = ReviewRepository(db).get_place_summary(int(item["id"]))
+    effective_rating = average_rating if average_rating is not None else item.get("google_rating") or item.get("rating")
+
+    return PlaceResponse(
+        id=int(item["id"]),
+        name=item["name"],
+        address=item["address"],
+        rating=effective_rating,
+        review_count=review_count,
+        google_rating=item.get("google_rating") or item.get("rating"),
+        google_review_count=item.get("google_review_count"),
+        web_rating=average_rating,
+        web_review_count=review_count,
+        distance_km=item.get("distance_km"),
+        latitude=item.get("latitude"),
+        longitude=item.get("longitude"),
+        price_level=item.get("price_level"),
+        open_now=item.get("open_now"),
+        photo_url=item.get("photo_url"),
+        contact_phone=item.get("contact_phone"),
+        primary_type=item.get("primary_type"),
+        score=item.get("score"),
+    )
 
 
 @router.get("/{place_id}", response_model=PlaceDetailResponse)
@@ -26,7 +67,9 @@ def get_place_detail(place_id: int, db: Session = Depends(get_db)) -> PlaceDetai
     if place is None:
         place_name = "Sample Place" if place_id == 1 else f"Place #{place_id}"
         place_address = "123 Demo Street" if place_id == 1 else "Unknown address"
-        place_rating = average_rating if average_rating is not None else (4.5 if place_id == 1 else None)
+        google_rating = 4.5 if place_id == 1 else None
+        google_review_count = None
+        place_rating = average_rating if average_rating is not None else google_rating
         distance_km = 1.2 if place_id == 1 else None
         price_level = 2 if place_id == 1 else None
         open_now = True if place_id == 1 else None
@@ -40,7 +83,15 @@ def get_place_detail(place_id: int, db: Session = Depends(get_db)) -> PlaceDetai
     else:
         place_name = google_detail.get("name") if google_detail else place.name
         place_address = google_detail.get("address") if google_detail else place.address
-        place_rating = average_rating if average_rating is not None else place.rating
+        google_rating = (
+            google_detail.get("google_rating")
+            if google_detail and google_detail.get("google_rating") is not None
+            else google_detail.get("rating")
+            if google_detail
+            else place.rating
+        )
+        google_review_count = google_detail.get("google_review_count") if google_detail else None
+        place_rating = average_rating if average_rating is not None else google_rating
         distance_km = None
         price_level = google_detail.get("price_level") if google_detail else place.price_level
         open_now = google_detail.get("open_now") if google_detail else place.open_now
@@ -57,6 +108,10 @@ def get_place_detail(place_id: int, db: Session = Depends(get_db)) -> PlaceDetai
         name=place_name,
         address=place_address,
         rating=place_rating,
+        google_rating=google_rating,
+        google_review_count=google_review_count,
+        web_rating=average_rating,
+        web_review_count=review_count,
         distance_km=distance_km,
         price_level=price_level,
         open_now=open_now,

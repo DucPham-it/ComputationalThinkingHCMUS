@@ -35,6 +35,11 @@ class RecommendationQuery(BaseModel):
     preferred_types: list[str] = []
 
 
+class ResolvePlacePointRequest(BaseModel):
+    latitude: float
+    longitude: float
+
+
 class PlaceResponse(BaseModel):
     """Summary output shown in recommendation list.
 
@@ -47,7 +52,14 @@ class PlaceResponse(BaseModel):
     name: str
     address: str
     rating: float | None = None
+    review_count: int | None = None
+    google_rating: float | None = None
+    google_review_count: int | None = None
+    web_rating: float | None = None
+    web_review_count: int | None = None
     distance_km: float | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     price_level: int | None = None
     open_now: bool | None = None
     photo_url: str | None = None

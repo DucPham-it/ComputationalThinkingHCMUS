@@ -1,0 +1,20 @@
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS first_name VARCHAR(255);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS last_name VARCHAR(255);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS birth_date DATE;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS gender VARCHAR(50);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS address TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_users_email_lower
+ON users ((LOWER(email)));
+
+CREATE INDEX IF NOT EXISTS idx_users_user_name_lower
+ON users ((LOWER(user_name)));

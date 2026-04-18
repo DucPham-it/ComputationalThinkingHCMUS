@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { MapPin, Phone, Star } from "lucide-react";
 
 import LoadingSpinner from "../components/common/LoadingSpinner";
@@ -7,8 +7,12 @@ import Error from "../components/common/Error";
 import Section from "../components/common/Section";
 import ReviewList from "../components/review/ReviewList";
 import ReviewForm from "../components/review/ReviewForm";
+import { addFavorite } from "../services/favoriteService";
 import { fetchPlaceDetail } from "../services/placeService";
+import { recordPlacePick } from "../services/placeService";
 import { fetchReviews } from "../services/reviewService";
+import { useApp } from "../hooks/useApp";
+import { formatRating } from "../utils/formatter";
 
 /**
  * Place detail page.
@@ -20,7 +24,9 @@ import { fetchReviews } from "../services/reviewService";
  * - detail block with address, description, hours, images, reviews summary
  */
 export default function PlaceDetail() {
+  const navigate = useNavigate();
   const { id } = useParams();
+  const { setSelectedPlace } = useApp();
   const [place, setPlace] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +69,8 @@ export default function PlaceDetail() {
         ...currentPlace,
         rating: result?.average_rating ?? currentPlace.rating,
         review_count: result?.review_count ?? currentPlace.review_count,
+        web_rating: result?.average_rating ?? currentPlace.web_rating,
+        web_review_count: result?.review_count ?? currentPlace.web_review_count,
       };
     });
   }
@@ -79,13 +87,34 @@ export default function PlaceDetail() {
         title={place.name}
         subtitle={place.address}
         action={
-          <Link
-            to={`/reviews/${id}`}
-            className="btn-outline"
-            style={{ padding: "10px 16px", borderRadius: "14px", fontWeight: 700 }}
-          >
-            Open review page
-          </Link>
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <button
+              className="btn-primary"
+              style={{ padding: "10px 16px", borderRadius: "14px", fontWeight: 700 }}
+              onClick={() => {
+                recordPlacePick(place.id).catch((err) => {
+                  console.error("Failed to record place pick", err);
+                });
+                setSelectedPlace(place);
+                navigate("/route");
+              }}
+            >
+              Pick This Place
+            </button>
+            <button
+              className="btn-outline"
+              style={{ padding: "10px 16px", borderRadius: "14px", fontWeight: 700 }}
+              onClick={async () => {
+                try {
+                  await addFavorite(place.id);
+                } catch (err) {
+                  console.error("Failed to save favorite", err);
+                }
+              }}
+            >
+              Save Place
+            </button>
+          </div>
         }
       >
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -116,9 +145,19 @@ export default function PlaceDetail() {
               <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
                 <Star size={18} fill="var(--color-accent)" color="var(--color-accent)" />
                 <div>
-                  <strong style={{ display: "block" }}>{place.rating ?? "N/A"}</strong>
+                  <strong style={{ display: "block" }}>Web {formatRating(place.web_rating)}</strong>
                   <span style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>
-                    {place.review_count ?? reviews.length} reviews
+                    {place.web_review_count ?? reviews.length} community reviews
+                  </span>
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+                <Star size={18} color="#94a3b8" />
+                <div>
+                  <strong style={{ display: "block" }}>Google {formatRating(place.google_rating)}</strong>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>
+                    {place.google_review_count ?? "No Google count"} ratings
                   </span>
                 </div>
               </div>
@@ -155,7 +194,7 @@ export default function PlaceDetail() {
 
       <Section
         title="Reviews"
-        subtitle="Read what other visitors thought before you decide to go."
+        subtitle="Community reviews from people who used this web app are shown separately from the Google Maps rating."
       >
         <ReviewList reviews={reviews} />
       </Section>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
     Star, 
@@ -5,9 +6,14 @@ import {
     DollarSign, 
     Clock, 
     ChevronRight, 
-    Sparkles 
+    Sparkles,
+    Route,
+    Heart
 } from "lucide-react";
 import { formatRating } from "../../utils/formatter";
+import { useApp } from "../../hooks/useApp";
+import { addFavorite } from "../../services/favoriteService";
+import { recordPlacePick } from "../../services/placeService";
 
 /**
  * PlaceCard Component - Thẻ hiển thị thông tin địa điểm (Advanced UI)
@@ -19,9 +25,43 @@ import { formatRating } from "../../utils/formatter";
  */
 export default function PlaceCard({ place }) {
     const navigate = useNavigate();
+    const { setSelectedPlace } = useApp();
+    const [isSaved, setIsSaved] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        setIsSaved(false);
+        setSaving(false);
+    }, [place.id]);
 
     function handleClick() {
         navigate(`/places/${place.id}`);
+    }
+
+    function handlePick(event) {
+        event.stopPropagation();
+        recordPlacePick(place.id).catch((error) => {
+            console.error("Failed to record place pick", error);
+        });
+        setSelectedPlace(place);
+        navigate("/route");
+    }
+
+    async function handleSave(event) {
+        event.stopPropagation();
+        if (saving || isSaved) {
+            return;
+        }
+
+        try {
+            setSaving(true);
+            await addFavorite(place.id);
+            setIsSaved(true);
+        } catch (error) {
+            console.error("Failed to save place", error);
+        } finally {
+            setSaving(false);
+        }
     }
 
     // Xử lý logic hiển thị màu sắc cho trạng thái Đóng/Mở cửa
@@ -46,8 +86,9 @@ export default function PlaceCard({ place }) {
             {/* 1. HERO BANNER AREA: Điểm nhấn thị giác */}
             <div style={{
                 height: "130px",
-                // Nếu backend có trả về image_url, bạn có thể thay thế bằng: `url(${place.image_url})`
-                background: "linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%)", 
+                background: place.photo_url
+                    ? `linear-gradient(rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.18)), url(${place.photo_url}) center/cover`
+                    : "linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%)",
                 position: "relative",
                 borderBottom: "1px solid var(--color-border)"
             }}>
@@ -134,6 +175,10 @@ export default function PlaceCard({ place }) {
                     </div>
                 </div>
 
+                <div style={{ fontSize: "0.85rem", color: "var(--color-text-soft)", fontWeight: 600 }}>
+                    Reviews: {place.review_count ?? 0}
+                </div>
+
                 {/* Phân cách */}
                 <div style={{ marginTop: "auto" }}>
                     <div style={{ width: "100%", height: "1px", background: "var(--color-border)", margin: "12px 0", borderStyle: "dashed", borderWidth: "1px 0 0 0" }} />
@@ -165,27 +210,63 @@ export default function PlaceCard({ place }) {
                 </div>
 
                 {/* 3. ACTION BUTTON */}
-                <button
-                    className="btn-outline press"
-                    style={{
-                        width: "100%",
-                        marginTop: "4px",
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "10px",
-                        borderRadius: "10px",
-                        fontWeight: 600
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation(); // Ngăn sự kiện click của button kích hoạt sự kiện của card
-                        handleClick();
-                    }}
-                >
-                    <span>View Details</span>
-                    <ChevronRight size={18} />
-                </button>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginTop: "4px" }}>
+                    <button
+                        className="btn-outline press"
+                        style={{
+                            width: "100%",
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "10px",
+                            borderRadius: "10px",
+                            fontWeight: 600
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleClick();
+                        }}
+                    >
+                        <span>View</span>
+                        <ChevronRight size={18} />
+                    </button>
+                    <button
+                        className={isSaved ? "btn-primary press" : "btn-outline press"}
+                        style={{
+                            width: "100%",
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "10px",
+                            borderRadius: "10px",
+                            fontWeight: 700
+                        }}
+                        onClick={handleSave}
+                        disabled={saving}
+                    >
+                        <Heart size={18} fill={isSaved ? "currentColor" : "none"} />
+                        <span>{isSaved ? "Saved" : saving ? "Saving" : "Save"}</span>
+                    </button>
+                    <button
+                        className="btn-primary press"
+                        style={{
+                            width: "100%",
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "10px",
+                            borderRadius: "10px",
+                            fontWeight: 700
+                        }}
+                        onClick={handlePick}
+                    >
+                        <span>Pick</span>
+                        <Route size={18} />
+                    </button>
+                </div>
             </div>
         </div>
     );

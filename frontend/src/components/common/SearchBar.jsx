@@ -12,13 +12,17 @@ export default function SearchBar({
     value = "", 
     onChange, 
     onSubmit,
-    placeholder = "Where do you want to go? (food, cafe, mall...)"
+    disabled = false,
+    placeholder = "What kind of place should we suggest? (food, cafe, mall...)"
 }) {
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef(null);
 
     // Xử lý khi nhấn phím trên bàn phím
     function handleKeyDown(event) {
+        if (disabled) {
+            return;
+        }
         if (event.key === "Enter") {
             onSubmit?.();
             // Tự động bỏ focus để đóng bàn phím ảo trên thiết bị di động
@@ -28,6 +32,9 @@ export default function SearchBar({
 
     // Xóa nhanh nội dung và giữ focus để người dùng gõ từ khóa mới
     function handleClear() {
+        if (disabled) {
+            return;
+        }
         onChange?.("");
         inputRef.current?.focus(); 
     }
@@ -38,7 +45,8 @@ export default function SearchBar({
             className="search-bar"
             style={{ 
                 alignItems: "center",
-                position: "relative" 
+                position: "relative",
+                opacity: disabled ? 0.72 : 1
             }}
         >
             {/* Search Icon: Đổi màu mượt mà khi người dùng đang nhập liệu */}
@@ -62,6 +70,7 @@ export default function SearchBar({
                 onKeyDown={handleKeyDown}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
+                disabled={disabled}
                 style={{
                     flex: 1,
                     border: "none",
@@ -79,6 +88,7 @@ export default function SearchBar({
                 <button
                     className="press"
                     onClick={handleClear}
+                    disabled={disabled}
                     style={{
                         display: "flex",
                         alignItems: "center",
@@ -107,6 +117,7 @@ export default function SearchBar({
             <button
                 className="btn-primary press"
                 onClick={onSubmit}
+                disabled={disabled}
                 style={{
                     display: "flex",
                     alignItems: "center",
@@ -119,7 +130,7 @@ export default function SearchBar({
                 }}
             >
                 <Sparkles size={18} />
-                <span>Explore</span>
+                <span>Suggest</span>
             </button>
         </div>
     );

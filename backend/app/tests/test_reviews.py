@@ -1,11 +1,14 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.routes.auth import login, register
+from fastapi import HTTPException
+
+from app.api.deps import require_completed_profile
+from app.api.routes.auth import login, register, update_profile
 from app.api.routes.favorites import list_favorites
 from app.api.routes.reviews import create_review, list_reviews
 from app.schemas.review_schema import ReviewCreateRequest
-from app.schemas.user_schema import LoginRequest, RegisterRequest
+from app.schemas.user_schema import LoginRequest, RegisterRequest, UpdateProfileRequest
 
 
 def build_test_session():
@@ -17,7 +20,12 @@ def build_test_session():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_name TEXT NOT NULL,
                 email TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL
+                password_hash TEXT NOT NULL,
+                first_name TEXT,
+                last_name TEXT,
+                birth_date TEXT,
+                gender TEXT,
+                address TEXT
             )
             """
         )
@@ -66,12 +74,38 @@ def build_test_session():
 def test_register_login_review_and_favorites_flow():
     db = build_test_session()
 
-    register_response = register(RegisterRequest(email="test@example.com", password="secret12"), db)
-    login_response = login(LoginRequest(email="test@example.com", password="secret12"), db)
+    register_response = register(
+        RegisterRequest(
+            user_name="traveler01",
+            email="test@example.com",
+            password="secret12",
+        ),
+        db,
+    )
+    profile_response = update_profile(
+        UpdateProfileRequest(
+            first_name="Test",
+            last_name="User",
+            birth_date="2000-01-15",
+            gender=None,
+            address=None,
+        ),
+        {"id": 1, "email": "test@example.com"},
+        db,
+    )
+    login_response = login(LoginRequest(identifier="traveler01", password="secret12"), db)
+    email_login_response = login(LoginRequest(email="test@example.com", password="secret12"), db)
 
-    assert register_response.email == "test@example.com"
+    assert register_response.user.email == "test@example.com"
+    assert register_response.user.user_name == "traveler01"
+    assert register_response.user.first_name is None
     assert register_response.access_token
+    assert profile_response.user.first_name == "Test"
+    assert profile_response.user.gender is None
+    assert profile_response.user.address is None
     assert login_response.access_token
+    assert login_response.user.user_name == "traveler01"
+    assert email_login_response.user.email == "test@example.com"
 
     current_user = {"id": 1, "email": "test@example.com"}
     review_response = create_review(
@@ -88,5 +122,27 @@ def test_register_login_review_and_favorites_flow():
 
     assert reviews_payload["items"][0].content == "Very good"
     assert favorites_payload["items"][0]["id"] == 1
+
+    db.close()
+
+
+def test_require_completed_profile_rejects_incomplete_profile():
+    db = build_test_session()
+    register(
+        RegisterRequest(
+            user_name="traveler02",
+            email="incomplete@example.com",
+            password="secret12",
+        ),
+        db,
+    )
+
+    try:
+        require_completed_profile({"id": 1, "email": "incomplete@example.com"}, db)
+    except HTTPException as exc:
+        assert exc.status_code == 403
+        assert exc.detail == "Please complete your profile before using this feature."
+    else:
+        raise AssertionError("Expected incomplete profile to be rejected.")
 
     db.close()

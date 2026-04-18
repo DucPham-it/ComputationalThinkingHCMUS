@@ -10,47 +10,53 @@
  */
 
 import { Marker, InfoWindow } from "@react-google-maps/api";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import PlacePopupCard from "./PlacePopupCard";
 
-// Star icon SVG component
-const StarIcon = () => (
-    <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="#facc15"
-        style={{ flexShrink: 0 }}
-    >
-        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-    </svg>
-);
+function buildMarkerIcon(color, scale = 9) {
+    if (!window.google?.maps) {
+        return undefined;
+    }
 
-// Location pin icon SVG component
-const LocationIcon = () => (
-    <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="#ef4444"
-        style={{ flexShrink: 0 }}
-    >
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-    </svg>
-);
+    return {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale,
+        fillColor: color,
+        fillOpacity: 1,
+        strokeColor: "#ffffff",
+        strokeWeight: 2,
+    };
+}
 
-// Custom marker icons
-const markerIcon = {
-    url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
-    scaledSize: { width: 40, height: 40 },
-};
-
-const selectedMarkerIcon = {
-    url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-    scaledSize: { width: 48, height: 48 },
-};
-
-export default function MarkerList({ places = [], onPlaceSelect }) { //onPlaceSelect: Callback to notify the parent when the user clicks a marker
+export default function MarkerList({
+    places = [],
+    onPlaceSelect,
+    onPickPlace,
+    onViewPlace,
+    onSavePlace,
+    onDismissPlace,
+    primaryActionLabel,
+    selectedPlaceId,
+    selectionModeLabel,
+    cancelActionLabel,
+}) { //onPlaceSelect: Callback to notify the parent when the user clicks a marker
     const [selected, setSelected] = useState(null);
+    const markerIcon = buildMarkerIcon("#dc2626");
+    const selectedMarkerIcon = buildMarkerIcon("#f59e0b", 10);
+
+    useEffect(() => {
+        if (!selectedPlaceId) {
+            setSelected(null);
+            return;
+        }
+
+        const matchedPlace = places.find((place) => place.id === selectedPlaceId);
+        if (matchedPlace) {
+            setSelected(matchedPlace);
+            return;
+        }
+        setSelected(null);
+    }, [places, selectedPlaceId]);
 
     const handleMarkerClick = useCallback((place) => {
         setSelected(place);
@@ -58,8 +64,11 @@ export default function MarkerList({ places = [], onPlaceSelect }) { //onPlaceSe
     }, [onPlaceSelect]);
 
     const handleCloseClick = useCallback(() => {
+        if (selected && onDismissPlace) {
+            onDismissPlace(selected);
+        }
         setSelected(null);
-    }, []);
+    }, [onDismissPlace, selected]);
 
     // Early return if no places
     if (!places || places.length === 0) {
@@ -90,46 +99,16 @@ export default function MarkerList({ places = [], onPlaceSelect }) { //onPlaceSe
                                 onCloseClick={handleCloseClick}
                                 options={{ maxWidth: 250 }}
                             >
-                                <div style={{ padding: "8px", minWidth: "150px" }}>
-                                    <h3 style={{
-                                        margin: "0 0 8px 0",
-                                        fontSize: "16px",
-                                        fontWeight: "600",
-                                        color: "#1a1a1a"
-                                    }}>
-                                        {place.name}
-                                    </h3>
-                                    { /* Rating and distance — only show if data is available */ }
-                                    <div style={{
-                                        display: "flex",
-                                        gap: "12px",
-                                        fontSize: "14px",
-                                        color: "#666"
-                                    }}>
-                                        { /* Only render if place.rating exists (not null/undefined/0) */ }
-                                        {place.rating && (
-                                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                                <StarIcon />
-                                                {place.rating}
-                                            </span>
-                                        )}
-                                        {place.distance_km && (
-                                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                                <LocationIcon />
-                                                {place.distance_km} km
-                                            </span>
-                                        )}
-                                    </div>
-                                    {place.address && (
-                                        <p style={{
-                                            margin: "8px 0 0 0",
-                                            fontSize: "12px",
-                                            color: "#888"
-                                        }}>
-                                            {place.address}
-                                        </p>
-                                    )}
-                                </div>
+                                <PlacePopupCard
+                                    place={place}
+                                    onViewPlace={onViewPlace}
+                                    onSavePlace={onSavePlace}
+                                    onPrimaryAction={onPickPlace}
+                                    onCancelSelection={onDismissPlace ? handleCloseClick : undefined}
+                                    primaryActionLabel={primaryActionLabel}
+                                    selectionModeLabel={selectionModeLabel}
+                                    cancelActionLabel={cancelActionLabel}
+                                />
                             </InfoWindow>
                         )}
                     </Marker>

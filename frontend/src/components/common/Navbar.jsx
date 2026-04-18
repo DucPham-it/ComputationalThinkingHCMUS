@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import AppLogo from "../../assets/pictures/logo.png";
+import { useAuth } from "../../hooks/useAuth";
 import { 
     MapPin, 
     Navigation, 
@@ -7,8 +9,7 @@ import {
     User, 
     Menu, 
     X, 
-    Compass,
-    Sparkles
+    Compass
 } from "lucide-react";
 
 /**
@@ -20,6 +21,7 @@ import {
  * - Micro-interactions: Hiệu ứng hover và click mượt mà (smooth transitions).
  */
 export default function Navbar() {
+    const { isAuthenticated, hasCompletedProfile } = useAuth();
     const location = useLocation();
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -50,11 +52,12 @@ export default function Navbar() {
 
     // Cấu hình danh sách điều hướng (Navigation Config)
     const navLinks = [
-        { path: "/", label: "Explore", icon: Compass },
+        { path: "/", label: "Suggestion", icon: Compass },
         { path: "/map", label: "Map", icon: MapPin },
         { path: "/route", label: "Route", icon: Navigation },
         { path: "/favorites", label: "Saved", icon: Heart },
     ];
+    const profileLabel = hasCompletedProfile ? "Profile" : "Complete Profile";
 
     return (
         <header 
@@ -72,19 +75,29 @@ export default function Navbar() {
         >
             <div className="container navbar-inner" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 
-                {/* LOGO AREA: Thiết kế tinh tế với Gradient Icon */}
+               
                 <Link to="/" className="logo press" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     <div style={{
-                        background: "linear-gradient(135deg, var(--color-primary), #60a5fa)",
-                        color: "white",
-                        padding: "8px",
-                        borderRadius: "14px",
+                        background: "rgba(255, 255, 255, 0.88)",
+                        padding: "6px",
+                        borderRadius: "16px",
                         display: "flex",
-                        boxShadow: "0 4px 15px rgba(37, 99, 235, 0.3)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "0 10px 24px rgba(15, 23, 42, 0.12)",
                         transform: isScrolled ? "scale(0.9)" : "scale(1)",
                         transition: "transform 0.3s ease"
                     }}>
-                        <Sparkles size={20} fill="white" />
+                        <img
+                            src={AppLogo}
+                            alt="SmartTravel logo"
+                            style={{
+                                width: "42px",
+                                height: "42px",
+                                objectFit: "contain",
+                                display: "block"
+                            }}
+                        />
                     </div>
                     <span style={{ 
                         fontSize: "1.25rem", 
@@ -92,7 +105,7 @@ export default function Navbar() {
                         letterSpacing: "-0.04em",
                         color: "var(--color-text)" 
                     }}>
-                        Smart<span style={{ color: "var(--color-primary)" }}>Travel</span>
+                        GoTo<span style={{ color: "var(--color-primary)" }}>Everywhere</span>
                     </span>
                 </Link>
 
@@ -126,7 +139,7 @@ export default function Navbar() {
 
                     {/* CALL TO ACTION: Nút đăng nhập nổi bật */}
                     <Link 
-                        to="/login" 
+                        to={isAuthenticated ? "/profile" : "/login"} 
                         className="btn-primary press"
                         style={{
                             display: "flex",
@@ -140,7 +153,7 @@ export default function Navbar() {
                         }}
                     >
                         <User size={16} strokeWidth={2.5} />
-                        Sign In
+                        {isAuthenticated ? profileLabel : "Sign In"}
                     </Link>
                 </nav>
 
@@ -192,8 +205,8 @@ export default function Navbar() {
                             {link.label}
                         </Link>
                     ))}
-                    <Link to="/login" className="btn-primary" style={{ textAlign: "center", padding: "14px", marginTop: "8px" }}>
-                        Sign In
+                    <Link to={isAuthenticated ? "/profile" : "/login"} className="btn-primary" style={{ textAlign: "center", padding: "14px", marginTop: "8px" }}>
+                        {isAuthenticated ? profileLabel : "Sign In"}
                     </Link>
                 </div>
             )}

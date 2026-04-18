@@ -30,3 +30,15 @@ export async function fetchPlaceDetail(id) {
   const response = await api.get(`/places/${id}`);
   return response.data;
 }
+
+export async function recordPlacePick(placeId) {
+  await api.post(`/recommendations/picks/${placeId}`);
+}
+
+export async function resolvePlaceFromCoordinates({ latitude, longitude }) {
+  const response = await api.post("/places/resolve-point", {
+    latitude,
+    longitude,
+  });
+  return response.data;
+}

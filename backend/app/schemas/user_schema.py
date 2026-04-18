@@ -3,18 +3,23 @@
 Schemas validate data crossing the API boundary.
 """
 
-from pydantic import BaseModel, EmailStr, Field
+from datetime import date
+
+from pydantic import AliasChoices, BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
     """Input for login API.
 
     Input:
-    - email: valid email string
+    - identifier: username or email used for login
     - password: raw password entered by user
     """
 
-    email: EmailStr
+    identifier: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("identifier", "email", "user_name"),
+    )
     password: str = Field(min_length=6)
 
 
@@ -26,19 +31,37 @@ class RegisterRequest(BaseModel):
     - add favorite categories and travel preferences
     """
 
+    user_name: str = Field(min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(min_length=6)
 
 
-class AuthResponse(BaseModel):
-    """Output for auth APIs.
+class UpdateProfileRequest(BaseModel):
+    """Input for profile completion/update after registration."""
 
-    Output:
-    - message: brief status summary
-    - email: account email
-    - access_token: optional JWT token for authenticated requests
-    """
+    first_name: str = Field(min_length=1, max_length=255)
+    last_name: str = Field(min_length=1, max_length=255)
+    birth_date: date
+    gender: str | None = Field(default=None, min_length=1, max_length=50)
+    address: str | None = Field(default=None, min_length=1, max_length=500)
+
+
+class UserResponse(BaseModel):
+    """Serialized user profile returned by auth APIs."""
+
+    id: int
+    user_name: str
+    email: EmailStr
+    first_name: str | None = None
+    last_name: str | None = None
+    birth_date: date | None = None
+    gender: str | None = None
+    address: str | None = None
+
+
+class AuthResponse(BaseModel):
+    """Output for auth APIs."""
 
     message: str
-    email: EmailStr
+    user: UserResponse
     access_token: str | None = None

@@ -2,8 +2,11 @@
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
+from app.db.session import get_db
+from app.repositories.user_repo import UserRepository
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -29,3 +32,24 @@ def get_current_user(
         "id": int(payload["sub"]),
         "email": payload["email"],
     }
+
+
+def require_completed_profile(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Require the current user to finish mandatory profile fields."""
+    user = UserRepository(db).get_by_id(current_user["id"])
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    if not user.first_name or not user.last_name or user.birth_date is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please complete your profile before using this feature.",
+        )
+
+    return current_user

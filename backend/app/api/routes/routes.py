@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.deps import require_completed_profile
 from app.schemas.route_schema import RouteResponse, RouteStep
 from app.services.directions_service import get_directions
 
@@ -7,7 +8,12 @@ router = APIRouter()
 
 
 @router.get("/plan", response_model=RouteResponse)
-def plan_route(origin: str = "", destination: str = "", travel_mode: str = "driving") -> RouteResponse:
+def plan_route(
+    origin: str = "",
+    destination: str = "",
+    travel_mode: str = "driving",
+    current_user: dict = Depends(require_completed_profile),
+) -> RouteResponse:
     """Plan route between origin and destination.
 
     Input:
@@ -17,6 +23,7 @@ def plan_route(origin: str = "", destination: str = "", travel_mode: str = "driv
     Output:
     - distance, duration, polyline, and route steps
     """
+    _ = current_user
     data = get_directions(origin=origin, destination=destination, travel_mode=travel_mode)
     return RouteResponse(
         origin=data["origin"],

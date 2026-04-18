@@ -1,230 +1,728 @@
-"use client";
-
-/**
- * Route planning page.
- *
- * Input:
- * - start point and destination
- *
- * Output:
- * - map route, distance, estimated travel time, steps
- */
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Marker } from "@react-google-maps/api";
 
 import MapContainer from "../components/map/MapContainer";
+import MarkerList from "../components/map/MarkerList";
 import RouteMap from "../components/map/RouteMap";
-import { useState, useCallback } from "react";
-
-// SVG Icons cho travel modes
-const TravelModeIcons = {
-    DRIVING: "M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z",
-    WALKING: "M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7",
-    BICYCLING: "M15.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM5 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.9 0-3.5-1.6-3.5-3.5s1.6-3.5 3.5-3.5 3.5 1.6 3.5 3.5-1.6 3.5-3.5 3.5zm5.8-10l2.4 2.4.8-.8c1.3 1.3 3 2.1 5 2.1V12c-1.4 0-2.7-.5-3.8-1.3L13 9.4l-3.3 3.3 2.1 2V19H10v-5.5l-1.2-1.2L7 18H4.5l2.5-6.5 2.8-2.8c.4-.4 1-.6 1.5-.6.6.1 1 .4 1.2.8l.8.8zM19 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.9 0-3.5-1.6-3.5-3.5s1.6-3.5 3.5-3.5 3.5 1.6 3.5 3.5-1.6 3.5-3.5 3.5z",
-    TRANSIT: "M12 2c-4.42 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h12v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm5.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6h-5V6h5v5z"
-};
+import Section from "../components/common/Section";
+import { useAuth } from "../hooks/useAuth";
+import { useApp } from "../hooks/useApp";
+import {
+  getCurrentBrowserLocation,
+  reverseGeocodeCoordinates,
+} from "../utils/geolocation";
+import { addFavorite } from "../services/favoriteService";
+import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/placeService";
+import { getRoute } from "../services/routeService";
 
 const TRAVEL_MODES = [
-    { value: "DRIVING", label: "Xe hoi" },
-    { value: "WALKING", label: "Di bo" },
-    { value: "BICYCLING", label: "Xe dap" },
-    { value: "TRANSIT", label: "Cong cong" }
+  { value: "DRIVING", label: "Driving" },
+  { value: "WALKING", label: "Walking" },
+  { value: "BICYCLING", label: "Bicycling" },
+  { value: "TRANSIT", label: "Transit" },
 ];
 
-export default function RouteView({
-    origin = null,
-    destination = null,
-    waypoints = [],
-    onRouteChange
-}) {
-    //defult travel mode
-    const [travelMode, setTravelMode] = useState("DRIVING");
-    //route info when caculated
-    //null = can't caculated
-    const [routeInfo, setRouteInfo] = useState(null);
+function toRouteLocation(textValue, coords = null) {
+  const normalized = String(textValue || "").trim();
+  if (coords && typeof coords.lat === "number" && typeof coords.lng === "number") {
+    return coords;
+  }
+  return normalized || null;
+}
 
-    // Callback when route is caculated
-    const handleRouteCalculated = useCallback((info) => {
-        setRouteInfo(info);
-        if (onRouteChange) {
-            onRouteChange(info);
-        }
-    }, [onRouteChange]);
+function buildPointMarker(color) {
+  if (!window.google?.maps) {
+    return undefined;
+  }
 
-    //find center base on origin and destination
-    const getMapCenter = () => {
-        if (origin) return { lat: origin.lat, lng: origin.lng };
-        if (destination) return { lat: destination.lat, lng: destination.lng };
-        return { lat: 10.7769, lng: 106.7009 }; // Default: Ho Chi Minh City
+  return {
+    path: window.google.maps.SymbolPath.CIRCLE,
+    scale: 9,
+    fillColor: color,
+    fillOpacity: 1,
+    strokeColor: "#ffffff",
+    strokeWeight: 2,
+  };
+}
+
+function buildTemporaryMapPlace(point, address = null) {
+  const fallbackAddress = address || `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+  return {
+    id: `temp-route-${point.lat}-${point.lng}-${Date.now()}`,
+    name: "Pinned point",
+    address: fallbackAddress,
+    latitude: point.lat,
+    longitude: point.lng,
+    photo_url: null,
+    google_rating: null,
+    google_review_count: 0,
+    web_rating: null,
+    web_review_count: 0,
+    distance_km: null,
+    _isTemporaryMapSelection: true,
+    _isLocalOnly: true,
+    _canView: false,
+    _canSave: false,
+  };
+}
+
+function sanitizePickedPlace(place) {
+  if (!place) {
+    return place;
+  }
+
+  const {
+    _isTemporaryMapSelection,
+    _isLocalOnly,
+    _canView,
+    _canSave,
+    ...cleanPlace
+  } = place;
+  return cleanPlace;
+}
+
+export default function RouteView() {
+  const navigate = useNavigate();
+  const { isAuthenticated, hasCompletedProfile } = useAuth();
+  const {
+    selectedPlace,
+    setSelectedPlace,
+    currentLocation,
+    setCurrentLocation,
+    recommendationPlaces,
+    setRecommendationPlaces,
+  } = useApp();
+  const [travelMode, setTravelMode] = useState("DRIVING");
+  const [originMode, setOriginMode] = useState(currentLocation ? "gps" : "manual");
+  const [selectionTarget, setSelectionTarget] = useState(
+    currentLocation ? "destination" : "origin"
+  );
+  const [originInput, setOriginInput] = useState("");
+  const [destinationInput, setDestinationInput] = useState("");
+  const [originPoint, setOriginPoint] = useState(null);
+  const [destinationPoint, setDestinationPoint] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
+  const [routeError, setRouteError] = useState("");
+  const [loadingRoute, setLoadingRoute] = useState(false);
+  const [locationNotice, setLocationNotice] = useState("");
+  const [selectedPopupPlaceId, setSelectedPopupPlaceId] = useState(null);
+
+  useEffect(() => {
+    if (selectedPlace?.address) {
+      setDestinationInput(selectedPlace.address);
+    }
+
+    if (
+      selectedPlace &&
+      typeof selectedPlace.latitude === "number" &&
+      typeof selectedPlace.longitude === "number"
+    ) {
+      setDestinationPoint({
+        lat: selectedPlace.latitude,
+        lng: selectedPlace.longitude,
+      });
+    }
+  }, [selectedPlace]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function hydrateLocation() {
+      if (currentLocation) {
+        setOriginMode("gps");
+        setSelectionTarget("destination");
+        return;
+      }
+
+      try {
+        const browserLocation = await getCurrentBrowserLocation();
+        if (!active) return;
+        setCurrentLocation(browserLocation);
+        setOriginMode("gps");
+        setSelectionTarget("destination");
+        setLocationNotice("Using your current GPS location as the default start point.");
+      } catch (error) {
+        if (!active) return;
+        setOriginMode("manual");
+        setSelectionTarget("origin");
+        setLocationNotice("GPS is unavailable. Pick the start point on the map or enter it manually.");
+      }
+    }
+
+    hydrateLocation();
+    return () => {
+      active = false;
     };
+  }, [currentLocation, setCurrentLocation]);
 
-    //Data testing for caculate route
-    const canShowRoute = origin && destination;
+  const canUseRoute = isAuthenticated && hasCompletedProfile;
 
+  const mapCenter = useMemo(() => {
+    if (selectionTarget === "destination" && destinationPoint) {
+      return destinationPoint;
+    }
+
+    if (originMode === "gps" && currentLocation) {
+      return currentLocation;
+    }
+
+    if (originPoint) {
+      return originPoint;
+    }
+
+    if (destinationPoint) {
+      return destinationPoint;
+    }
+
+    if (
+      selectedPlace &&
+      typeof selectedPlace.latitude === "number" &&
+      typeof selectedPlace.longitude === "number"
+    ) {
+      return { lat: selectedPlace.latitude, lng: selectedPlace.longitude };
+    }
+
+    return { lat: 10.7769, lng: 106.7009 };
+  }, [currentLocation, destinationPoint, originMode, originPoint, selectedPlace, selectionTarget]);
+
+  const originForRequest =
+    originMode === "gps" && currentLocation
+      ? `${currentLocation.lat},${currentLocation.lng}`
+      : originPoint
+      ? `${originPoint.lat},${originPoint.lng}`
+      : originInput.trim();
+
+  const destinationForRequest = destinationPoint
+    ? `${destinationPoint.lat},${destinationPoint.lng}`
+    : destinationInput.trim();
+
+  const routeOrigin = toRouteLocation(originInput, originMode === "gps" ? currentLocation : originPoint);
+  const routeDestination = toRouteLocation(destinationInput, destinationPoint);
+
+  const startSummary =
+    originMode === "gps" && currentLocation
+      ? `${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}`
+      : originPoint
+      ? `${originPoint.lat.toFixed(5)}, ${originPoint.lng.toFixed(5)}`
+      : originInput || "Pick a point on the map or type it manually";
+
+  const destinationSummary = destinationPoint
+    ? `${destinationPoint.lat.toFixed(5)}, ${destinationPoint.lng.toFixed(5)}`
+    : destinationInput || selectedPlace?.name || "Pick a place or click a destination on the map";
+
+  if (!canUseRoute) {
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {/* Travel Mode Selection */}
-            <div style={{
-                display: "flex",
-                gap: "8px",
-                padding: "12px",
-                background: "#fff",
-                borderRadius: "8px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-            }}>
-                {TRAVEL_MODES.map(mode => (
-                    <button
-                        key={mode.value}
-                        onClick={() => setTravelMode(mode.value)}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "8px 16px",
-                            borderRadius: "6px",
-                            border: travelMode === mode.value ? "2px solid #2196f3" : "1px solid #ddd",
-                            background: travelMode === mode.value ? "#e3f2fd" : "#fff",
-                            cursor: "pointer",
-                            transition: "all 0.2s"
-                        }}
-                    >
-                        <svg
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill={travelMode === mode.value ? "#2196f3" : "#666"}
-                        >
-                            <path d={TravelModeIcons[mode.value]} />
-                        </svg>
-                        <span style={{
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            color: travelMode === mode.value ? "#2196f3" : "#666"
-                        }}>
-                            {mode.label}
-                        </span>
-                    </button>
-                ))}
+      <div className="card" style={{ display: "grid", gap: "12px", marginTop: "24px" }}>
+        <h1>Profile required for Route</h1>
+        <p style={{ marginBottom: 0 }}>
+          You need a completed account profile before using route planning.
+        </p>
+        <p style={{ marginBottom: 0 }}>
+          {isAuthenticated ? (
+            <Link to="/profile" style={{ color: "var(--color-primary)", fontWeight: 700 }}>
+              Complete profile
+            </Link>
+          ) : (
+            <Link to="/login" style={{ color: "var(--color-primary)", fontWeight: 700 }}>
+              Sign in to continue
+            </Link>
+          )}
+        </p>
+      </div>
+    );
+  }
+
+  async function applyMapPoint(point, target) {
+    setRouteError("");
+    try {
+      const resolvedPlace = await resolvePlaceFromCoordinates({
+        latitude: point.lat,
+        longitude: point.lng,
+      });
+      const alreadyListed = recommendationPlaces.some((place) => place.id === resolvedPlace.id);
+      const previewPlace = {
+        ...resolvedPlace,
+        _isTemporaryMapSelection: !alreadyListed,
+      };
+      const mergedPlaces = [
+        previewPlace,
+        ...recommendationPlaces.filter((place) => place.id !== resolvedPlace.id),
+      ];
+      setRecommendationPlaces(mergedPlaces);
+      setSelectedPopupPlaceId(previewPlace.id);
+      setLocationNotice(
+        target === "origin"
+          ? "Map point previewed. Use Pick on map to confirm it as the start point."
+          : "Map point previewed. Use Pick on map to confirm it as the destination."
+      );
+      return;
+    } catch (error) {
+      try {
+        const formattedAddress = await reverseGeocodeCoordinates(point);
+        const fallbackPlace = buildTemporaryMapPlace(point, formattedAddress);
+        setRecommendationPlaces((previousPlaces) => [
+          fallbackPlace,
+          ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
+        ]);
+        setSelectedPopupPlaceId(fallbackPlace.id);
+        setLocationNotice(
+          target === "origin"
+            ? "Map point previewed manually. Use Pick on map to confirm it as the start point."
+            : "Map point previewed manually. Use Pick on map to confirm it as the destination."
+        );
+      } catch {
+        const fallbackPlace = buildTemporaryMapPlace(point);
+        setRecommendationPlaces((previousPlaces) => [
+          fallbackPlace,
+          ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
+        ]);
+        setSelectedPopupPlaceId(fallbackPlace.id);
+        setLocationNotice(
+          target === "origin"
+            ? "Map point previewed manually. Use Pick on map to confirm it as the start point."
+            : "Map point previewed manually. Use Pick on map to confirm it as the destination."
+        );
+      }
+    }
+  }
+
+  async function handleMapClick(point) {
+    await applyMapPoint(point, selectionTarget);
+  }
+
+  function removeTemporaryPreview(place) {
+    if (!place?._isTemporaryMapSelection) {
+      return;
+    }
+
+    setRecommendationPlaces((previousPlaces) =>
+      previousPlaces.filter((item) => item.id !== place.id)
+    );
+  }
+
+  function clearPreviewSelection(place) {
+    setSelectedPopupPlaceId(null);
+    if (place?._isTemporaryMapSelection) {
+      removeTemporaryPreview(place);
+    }
+  }
+
+  async function handleConfirmMapSelection(place) {
+    setSelectedPopupPlaceId(place.id);
+    const resolvedPoint =
+      typeof place.latitude === "number" && typeof place.longitude === "number"
+        ? { lat: place.latitude, lng: place.longitude }
+        : null;
+
+    if (selectionTarget === "origin") {
+      setOriginMode("manual");
+      setOriginPoint(resolvedPoint);
+      setOriginInput(
+        place.address ||
+          place.name ||
+          (resolvedPoint ? `${resolvedPoint.lat},${resolvedPoint.lng}` : "")
+      );
+      setLocationNotice("Start point confirmed from the map.");
+      clearPreviewSelection(place);
+      return;
+    }
+
+    if (typeof place.id === "number") {
+      recordPlacePick(place.id).catch((error) => {
+        console.error("Failed to record place pick", error);
+      });
+    }
+
+    setSelectedPlace(place._isLocalOnly ? null : sanitizePickedPlace(place));
+    setDestinationPoint(resolvedPoint);
+    setDestinationInput(
+      place.address ||
+        place.name ||
+        (resolvedPoint ? `${resolvedPoint.lat},${resolvedPoint.lng}` : "")
+    );
+    setLocationNotice("Destination confirmed from the map.");
+    clearPreviewSelection(place);
+  }
+
+  async function handleSavePlace(place) {
+    if (place._canSave === false) {
+      return;
+    }
+
+    try {
+      await addFavorite(place.id);
+      setLocationNotice("Place saved to your Saved list.");
+      if (place._isTemporaryMapSelection) {
+        setRecommendationPlaces((previousPlaces) =>
+          previousPlaces.map((item) =>
+            item.id === place.id
+              ? {
+                  ...item,
+                  _isTemporaryMapSelection: false,
+                }
+              : item
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Failed to save place", error);
+    }
+  }
+
+  async function handleRouteSubmit(event) {
+    event.preventDefault();
+    setRouteError("");
+
+    if (!originForRequest || !destinationForRequest) {
+      setRouteError("Please choose both a starting point and a destination.");
+      setRouteInfo(null);
+      return;
+    }
+
+    try {
+      setLoadingRoute(true);
+      const data = await getRoute({
+        origin: originForRequest,
+        destination: destinationForRequest,
+        travel_mode: travelMode.toLowerCase(),
+      });
+
+      setRouteInfo({
+        origin: data.origin,
+        destination: data.destination,
+        distance: data.distance_text,
+        duration: data.duration_text,
+        steps: (data.steps || []).map((step) => ({
+          instructions: step.instruction,
+          distance: step.distance_text,
+          duration: step.duration_text,
+        })),
+      });
+    } catch (error) {
+      setRouteInfo(null);
+      setRouteError(
+        error?.response?.data?.detail || "We couldn't calculate the route right now."
+      );
+    } finally {
+      setLoadingRoute(false);
+    }
+  }
+
+  async function handleUseGps() {
+    try {
+      const browserLocation = await getCurrentBrowserLocation();
+      setCurrentLocation(browserLocation);
+      setOriginMode("gps");
+      setOriginPoint(null);
+      setOriginInput("");
+      setSelectionTarget("destination");
+      setRouteError("");
+      setLocationNotice("GPS location updated successfully.");
+    } catch (error) {
+      setOriginMode("manual");
+      setSelectionTarget("origin");
+      setLocationNotice("Unable to read GPS. Choose the starting point manually or by clicking the map.");
+    }
+  }
+
+  const gpsMarkerIcon = buildPointMarker("#2563eb");
+  const originMarkerIcon = buildPointMarker("#16a34a");
+  const destinationMarkerIcon = buildPointMarker("#7c3aed");
+
+  return (
+    <div style={{ display: "grid", gap: "24px" }}>
+      <Section
+        title="Route Planner"
+        subtitle="Pan and zoom freely, preview any place on the map, then confirm it with Pick on map. Suggestion picks still become your destination by default."
+      >
+        <form className="card" onSubmit={handleRouteSubmit} style={{ display: "grid", gap: "18px" }}>
+          <div style={{ display: "grid", gap: "12px" }}>
+            <strong style={{ color: "var(--color-text)" }}>Start point</strong>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className={originMode === "gps" ? "btn-primary" : "btn-outline"}
+                style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
+                onClick={() => {
+                  setOriginMode("gps");
+                  setSelectedPopupPlaceId(null);
+                }}
+              >
+                Use GPS
+              </button>
+              <button
+                type="button"
+                className={selectionTarget === "origin" ? "btn-primary" : "btn-outline"}
+                style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
+                onClick={() => {
+                  setOriginMode("manual");
+                  setSelectionTarget("origin");
+                  setLocationNotice("Map is ready to confirm the next picked point as your start point.");
+                }}
+              >
+                Pick on map
+              </button>
+              <button
+                type="button"
+                className={originMode === "manual" && selectionTarget !== "origin" ? "btn-primary" : "btn-outline"}
+                style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
+                onClick={() => {
+                  setOriginMode("manual");
+                  setSelectedPopupPlaceId(null);
+                }}
+              >
+                Enter manually
+              </button>
+              <button
+                type="button"
+                className="btn-outline"
+                style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
+                onClick={handleUseGps}
+              >
+                Refresh GPS
+              </button>
             </div>
 
-            {/* Map */}
-            <MapContainer
-                center={getMapCenter()}
-                zoom={13}
+            {originMode === "gps" ? (
+              <div className="card" style={{ padding: "14px 16px", background: "rgba(255,255,255,0.72)" }}>
+                <strong style={{ display: "block", marginBottom: "6px" }}>Current GPS</strong>
+                <span style={{ color: "var(--color-text-soft)" }}>
+                  {currentLocation
+                    ? `${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}`
+                    : "Waiting for browser location..."}
+                </span>
+              </div>
+            ) : (
+              <input
+                value={originInput}
+                onChange={(event) => {
+                  setOriginPoint(null);
+                  setOriginInput(event.target.value);
+                }}
+                placeholder="Enter your starting point or click the map"
+              />
+            )}
+          </div>
+
+          <div style={{ display: "grid", gap: "12px" }}>
+            <strong style={{ color: "var(--color-text)" }}>Destination</strong>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className={selectionTarget === "destination" ? "btn-primary" : "btn-outline"}
+                style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
+                onClick={() => {
+                  setSelectionTarget("destination");
+                  setLocationNotice("Map is ready to confirm the next picked point as your destination.");
+                }}
+              >
+                Pick on map
+              </button>
+              <button
+                type="button"
+                className="btn-outline"
+                style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
+                onClick={() => setSelectionTarget("destination")}
+              >
+                Pick place marker
+              </button>
+            </div>
+            <input
+              value={destinationInput}
+              onChange={(event) => {
+                setDestinationPoint(null);
+                setSelectedPlace(null);
+                setDestinationInput(event.target.value);
+              }}
+              placeholder="Enter a destination or click the map"
+            />
+            {selectedPlace ? (
+              <div className="card" style={{ padding: "14px 16px", background: "rgba(255,255,255,0.72)" }}>
+                <strong style={{ display: "block", marginBottom: "6px" }}>Picked place</strong>
+                <span style={{ color: "var(--color-text-soft)" }}>
+                  {selectedPlace.name} - {selectedPlace.address}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          <div style={{ display: "grid", gap: "12px" }}>
+            <strong style={{ color: "var(--color-text)" }}>Travel mode</strong>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              {TRAVEL_MODES.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  className={travelMode === mode.value ? "btn-primary" : "btn-outline"}
+                  style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
+                  onClick={() => setTravelMode(mode.value)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: "14px 16px", background: "rgba(255,255,255,0.72)" }}>
+            <strong style={{ display: "block", marginBottom: "6px" }}>Map selection mode</strong>
+            <span style={{ color: "var(--color-text-soft)" }}>
+              {selectionTarget === "origin"
+                ? "Click anywhere or any place marker to preview it, then use Pick on map to confirm the start point."
+                : "Click anywhere or any place marker to preview it, then use Pick on map to confirm the destination."}
+            </span>
+          </div>
+
+          <div
+            className="card"
+            style={{
+              padding: "14px 16px",
+              background: "rgba(255,255,255,0.72)",
+              display: "grid",
+              gap: "8px",
+            }}
+          >
+            <strong style={{ color: "var(--color-text)" }}>Map markers</strong>
+            <span style={{ color: "var(--color-text-soft)" }}>
+              Blue = GPS, green = start point, purple = destination, orange = previewed point on the map.
+            </span>
+          </div>
+
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{ padding: "12px 18px", borderRadius: "14px", fontWeight: 700 }}
+              disabled={loadingRoute}
             >
-                {canShowRoute && (
-                    <RouteMap
-                        origin={{ lat: origin.lat, lng: origin.lng }}
-                        destination={{ lat: destination.lat, lng: destination.lng }}
-                        waypoints={waypoints}
-                        travelMode={travelMode}
-                        onRouteCalculated={handleRouteCalculated}
-                    />
-                )}
-            </MapContainer>
+              {loadingRoute ? "Calculating..." : "Find Shortest Route"}
+            </button>
+            <div style={{ alignSelf: "center", color: "var(--color-text-soft)", fontWeight: 600 }}>
+              {locationNotice}
+            </div>
+          </div>
 
-            {/* Route Info Summary */}
-            {routeInfo && (
-                <div style={{
-                    display: "flex",
-                    gap: "24px",
-                    padding: "16px",
-                    background: "#f0f9ff",
-                    borderRadius: "8px",
-                    border: "1px solid #bae6fd"
-                }}>
-                    <div>
-                        <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>
-                            Khoang cach
-                        </div>
-                        <div style={{ fontSize: "18px", fontWeight: "600", color: "#1a1a1a" }}>
-                            {routeInfo.distance}
-                        </div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>
-                            Thoi gian
-                        </div>
-                        <div style={{ fontSize: "18px", fontWeight: "600", color: "#1a1a1a" }}>
-                            {routeInfo.duration}
-                        </div>
-                    </div>
-                </div>
-            )}
+          {routeError ? (
+            <div className="card" style={{ padding: "14px 16px", color: "#b91c1c", background: "#fef2f2" }}>
+              {routeError}
+            </div>
+          ) : null}
+        </form>
+      </Section>
 
-            {/* Route Steps */}
-            {routeInfo && routeInfo.steps && routeInfo.steps.length > 0 && (
-                <div style={{
-                    background: "#fff",
-                    borderRadius: "8px",
-                    padding: "16px",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                    maxHeight: "300px",
-                    overflowY: "auto"
-                }}>
-                    <h3 style={{
-                        fontSize: "16px",
-                        fontWeight: "600",
-                        marginBottom: "12px",
-                        color: "#333"
-                    }}>
-                        Huong dan chi tiet
-                    </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                        {routeInfo.steps.map((step, index) => (
-                            <div
-                                key={index}
-                                style={{
-                                    display: "flex",
-                                    gap: "12px",
-                                    paddingBottom: "12px",
-                                    borderBottom: index < routeInfo.steps.length - 1 ? "1px solid #eee" : "none"
-                                }}
-                            >
-                                <div style={{
-                                    width: "24px",
-                                    height: "24px",
-                                    borderRadius: "50%",
-                                    background: "#2196f3",
-                                    color: "#fff",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: "12px",
-                                    fontWeight: "600",
-                                    flexShrink: 0
-                                }}>
-                                    {index + 1}
-                                </div>
-                                <div>
-                                    <div
-                                        style={{ fontSize: "14px", color: "#333" }}
-                                        dangerouslySetInnerHTML={{ __html: step.instructions }}
-                                    />
-                                    <div style={{
-                                        fontSize: "12px",
-                                        color: "#666",
-                                        marginTop: "4px"
-                                    }}>
-                                        {step.distance} - {step.duration}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+      <Section
+        title="Interactive Route Map"
+        subtitle="Browse markers freely. Nothing becomes start or destination until you confirm it with Pick on map."
+      >
+        <MapContainer center={mapCenter} zoom={13} onMapClick={handleMapClick}>
+          {recommendationPlaces?.length ? (
+            <MarkerList
+              places={recommendationPlaces}
+              onPlaceSelect={(place) => {
+                setSelectedPopupPlaceId(place.id);
+              }}
+              onViewPlace={(place) => {
+                if (place._canView === false) {
+                  return;
+                }
+                navigate(`/places/${place.id}`);
+              }}
+              onSavePlace={handleSavePlace}
+              onPickPlace={handleConfirmMapSelection}
+              onDismissPlace={clearPreviewSelection}
+              primaryActionLabel={
+                selectionTarget === "origin" ? "Pick on map: Start" : "Pick on map: Destination"
+              }
+              selectedPlaceId={selectedPopupPlaceId}
+              selectionModeLabel={
+                selectionTarget === "origin" ? "Start point mode" : "Destination mode"
+              }
+              cancelActionLabel="Cancel pin"
+            />
+          ) : null}
 
-            {/* annonce when have no data */}
-            {!canShowRoute && (
-                <div style={{
-                    padding: "24px",
-                    background: "#f5f5f5",
-                    borderRadius: "8px",
-                    textAlign: "center",
-                    color: "#666"
-                }}>
-                    Vui long chon diem bat dau va diem den de xem lo trinh
+          {originMode === "gps" && currentLocation ? (
+            <Marker position={currentLocation} icon={gpsMarkerIcon} title="Current GPS" />
+          ) : null}
+
+          {originMode !== "gps" && originPoint ? (
+            <Marker position={originPoint} icon={originMarkerIcon} title="Start point" />
+          ) : null}
+
+          {destinationPoint ? (
+            <Marker position={destinationPoint} icon={destinationMarkerIcon} title="Destination" />
+          ) : null}
+
+          {routeOrigin && routeDestination ? (
+            <RouteMap
+              origin={routeOrigin}
+              destination={routeDestination}
+              travelMode={travelMode}
+            />
+          ) : null}
+        </MapContainer>
+      </Section>
+
+      <Section
+        title="Trip Summary"
+        subtitle="The route will only be useful after you have actually chosen a start and destination."
+      >
+        <div className="card" style={{ display: "grid", gap: "16px" }}>
+          <div style={{ display: "grid", gap: "8px" }}>
+            <p style={{ margin: 0 }}>
+              <strong style={{ color: "var(--color-text)" }}>Start:</strong> {startSummary}
+            </p>
+            <p style={{ margin: 0 }}>
+              <strong style={{ color: "var(--color-text)" }}>Destination:</strong> {destinationSummary}
+            </p>
+          </div>
+
+          {routeInfo ? (
+            <>
+              <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>Distance</div>
+                  <strong style={{ color: "var(--color-text)" }}>{routeInfo.distance}</strong>
                 </div>
-            )}
+                <div>
+                  <div style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>Duration</div>
+                  <strong style={{ color: "var(--color-text)" }}>{routeInfo.duration}</strong>
+                </div>
+              </div>
+
+              {routeInfo.steps?.length ? (
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {routeInfo.steps.map((step, index) => (
+                    <div
+                      key={`${step.instructions}-${index}`}
+                      style={{
+                        padding: "14px 16px",
+                        borderRadius: "14px",
+                        background: "rgba(255,255,255,0.72)",
+                        border: "1px solid var(--color-border)",
+                      }}
+                    >
+                      <strong style={{ display: "block", marginBottom: "6px" }}>
+                        Step {index + 1}
+                      </strong>
+                      <div style={{ color: "var(--color-text)", marginBottom: "6px" }}>
+                        {step.instructions}
+                      </div>
+                      <div style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>
+                        {step.distance || "Unknown distance"} - {step.duration || "Unknown duration"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p style={{ margin: 0 }}>
+              Use GPS, type an address, click the map, or pick a marker first. Then calculate the route to see the shortest path summary here.
+            </p>
+          )}
         </div>
-    );
+      </Section>
+    </div>
+  );
 }

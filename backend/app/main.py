@@ -13,15 +13,48 @@ Responsibility:
 - expose health endpoint
 """
 
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import auth, favorites, places, recommendations, reviews, routes, weather
 from app.core.config import settings
 from app.db.connection import check_database_connection
-from app.db.session import engine
+from app.db.session import SessionLocal, engine
+from app.repositories.temp_place_cache_repo import TemporaryPlaceCacheRepository
 
-app = FastAPI(title=settings.app_name)
+
+async def run_temporary_cache_cleanup() -> None:
+    """Background cleanup loop for expired temporary place cache rows."""
+    interval_seconds = max(60, int(settings.temporary_place_cache_cleanup_interval_minutes) * 60)
+
+    while True:
+        db = SessionLocal()
+        try:
+            TemporaryPlaceCacheRepository(db).cleanup_expired()
+        except Exception as exc:  # pragma: no cover - background safety
+            print(f"Temporary cache cleanup failed: {exc}")
+            db.rollback()
+        finally:
+            db.close()
+
+        await asyncio.sleep(interval_seconds)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    cleanup_task = asyncio.create_task(run_temporary_cache_cleanup())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

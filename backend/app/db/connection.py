@@ -26,7 +26,9 @@ def normalize_database_url(database_url: str) -> str:
     Output:
     - SQLAlchemy-ready database URL
     """
-    if not database_url.strip():
+    database_url = database_url.strip()
+
+    if not database_url:
         return "sqlite:///placeholder.db"
 
     if database_url.startswith("postgres://"):

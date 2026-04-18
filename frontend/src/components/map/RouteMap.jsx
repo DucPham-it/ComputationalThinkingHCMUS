@@ -45,19 +45,30 @@ export default function RouteMap({
         // Each call consumes 1 API request (counts toward your quota)
         const directionsService = new window.google.maps.DirectionsService();
 
+        const normalizeLocation = (value) => {
+            if (typeof value === "string") {
+                return value;
+            }
+
+            if (value && typeof value.lat === "number" && typeof value.lng === "number") {
+                return new window.google.maps.LatLng(value.lat, value.lng);
+            }
+
+            return value;
+        };
+
         // Build waypoints array for Directions API
         // true = điểm dừng thật (có chỉ đường), false = chỉ qua
         const waypointsForApi = waypoints.map(wp => ({
-            location: new window.google.maps.LatLng(wp.lat, wp.lng),
+            location: normalizeLocation(wp),
             stopover: true  // true = stopover (includes directions), false = pass-through
         }));
 
         // Call the API to calculate the route
         directionsService.route(
             {
-                // Convert { lat, lng } into a LatLng object that Google Maps understands
-                origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-                destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+                origin: normalizeLocation(origin),
+                destination: normalizeLocation(destination),
                 waypoints: waypointsForApi,
                 travelMode: window.google.maps.TravelMode[travelMode],
                 optimizeWaypoints: true,
@@ -123,7 +134,7 @@ export default function RouteMap({
         <DirectionsRenderer
             directions={directions}
             options={{
-                suppressMarkers: false,
+                suppressMarkers: true,
                 polylineOptions: {
                     strokeColor: "#4285F4",
                     strokeWeight: 5,

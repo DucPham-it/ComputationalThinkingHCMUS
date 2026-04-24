@@ -15,6 +15,7 @@ export async function fetchReviews(placeId) {
 /**
  * Input:
  * - { place_id, content, rating, image_urls }
+ * - image_urls can include URLs returned by /uploads/review-images
  *
  * Output:
  * - review submission result with new aggregate stats

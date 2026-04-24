@@ -36,6 +36,7 @@ def _auth_response(
             birth_date=user.birth_date,
             gender=user.gender,
             address=user.address,
+            avatar_url=user.avatar_url,
             is_admin=is_admin,
         ),
         access_token=access_token,

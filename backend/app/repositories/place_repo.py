@@ -6,7 +6,6 @@ import json
 from datetime import datetime
 
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.models.place import Place
@@ -37,9 +36,7 @@ PLACE_SELECT_COLUMNS = """
     p.descriptions AS description,
     p.open_hours_json,
     p.popular_times_json,
-    NULL AS images_json,
     p.about_json,
-    NULL AS reviews_per_rating_json,
     p.status,
     p.place_id,
     p.cid,
@@ -54,39 +51,6 @@ PLACE_SELECT_COLUMNS = """
 PLACE_FROM_JOIN = """
     places AS p
     LEFT JOIN place_review_stats AS prs ON prs.place_id = p.id
-"""
-
-LEGACY_PLACE_SELECT_COLUMNS = """
-    id,
-    title AS name,
-    category,
-    address_text AS address,
-    place_id AS external_place_id,
-    review_rating AS rating,
-    review_count,
-    latitude,
-    longitude,
-    price_level,
-    price_range,
-    phone AS contact_phone,
-    thumbnail AS photo_url,
-    category AS primary_type,
-    website,
-    descriptions AS description,
-    open_hours_json,
-    popular_times_json,
-    images_json,
-    about_json,
-    reviews_per_rating_json,
-    status,
-    place_id,
-    cid,
-    borough,
-    street,
-    city,
-    postal_code,
-    state,
-    country
 """
 
 
@@ -171,37 +135,15 @@ class PlaceRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def _select_mappings(
-        self,
-        query: str,
-        params: dict | None = None,
-        *,
-        fallback_query: str | None = None,
-    ):
-        try:
-            return self.db.execute(text(query), params or {}).mappings()
-        except DBAPIError:
-            self.db.rollback()
-            if fallback_query is None:
-                raise
-            return self.db.execute(text(fallback_query), params or {}).mappings()
+    def _select_mappings(self, query: str, params: dict | None = None):
+        return self.db.execute(text(query), params or {}).mappings()
 
     @staticmethod
     def _to_place(row) -> Place:
         opening_hours = _loads_json(row.get("open_hours_json"), default={})
         popular_times = _loads_json(row.get("popular_times_json"), default={})
-        image_payload = _loads_json(row.get("images_json"), default=[])
         about_payload = _loads_json(row.get("about_json"), default=[])
-        reviews_per_rating = _loads_json(row.get("reviews_per_rating_json"), default={})
-
-        image_urls: list[str] = []
-        for item in image_payload:
-            if isinstance(item, str):
-                image_urls.append(item)
-            elif isinstance(item, dict) and item.get("image"):
-                image_urls.append(str(item["image"]))
-        if row.get("photo_url") and row["photo_url"] not in image_urls:
-            image_urls.insert(0, row["photo_url"])
+        image_urls = [row["photo_url"]] if row.get("photo_url") else []
 
         return Place(
             id=int(row["id"]),
@@ -225,7 +167,7 @@ class PlaceRepository:
             popular_times=popular_times,
             images=image_urls,
             about=about_payload if isinstance(about_payload, list) else [],
-            reviews_per_rating=reviews_per_rating if isinstance(reviews_per_rating, dict) else {},
+            reviews_per_rating={},
             status=row.get("status"),
             place_id=row.get("place_id"),
             cid=row.get("cid"),
@@ -246,11 +188,6 @@ class PlaceRepository:
                     WHERE p.id = :place_id
                     """,
                 {"place_id": place_id},
-                fallback_query=f"""
-                    SELECT {PLACE_SELECT_COLUMNS}
-                    FROM places
-                    WHERE id = :place_id
-                    """.replace(PLACE_SELECT_COLUMNS, LEGACY_PLACE_SELECT_COLUMNS),
             )
             .first()
         )
@@ -287,23 +224,6 @@ class PlaceRepository:
                     LIMIT 1
                     """,
                 {"value": normalized_value, "like_value": like_value},
-                fallback_query=f"""
-                    SELECT {PLACE_SELECT_COLUMNS}
-                    FROM places
-                    WHERE LOWER(title) = :value
-                       OR LOWER(address_text) = :value
-                       OR LOWER(title) LIKE :like_value
-                       OR LOWER(address_text) LIKE :like_value
-                       OR LOWER(COALESCE(descriptions, '')) LIKE :like_value
-                    ORDER BY
-                        CASE
-                            WHEN LOWER(title) = :value OR LOWER(address_text) = :value THEN 0
-                            ELSE 1
-                        END,
-                        review_rating DESC,
-                        review_count DESC
-                    LIMIT 1
-                    """.replace(PLACE_SELECT_COLUMNS, LEGACY_PLACE_SELECT_COLUMNS),
             )
             .first()
         )
@@ -332,24 +252,6 @@ class PlaceRepository:
                     LIMIT :limit
                     """,
                 {"keyword": normalized_keyword, "limit": limit},
-                fallback_query=f"""
-                    SELECT {PLACE_SELECT_COLUMNS}
-                    FROM places
-                    WHERE COALESCE(status, 'active') <> 'deleted'
-                      AND (
-                        :keyword = '%%'
-                        OR LOWER(title) LIKE :keyword
-                        OR LOWER(category) LIKE :keyword
-                        OR LOWER(address_text) LIKE :keyword
-                        OR LOWER(COALESCE(descriptions, '')) LIKE :keyword
-                      )
-                    ORDER BY
-                        CASE WHEN review_rating IS NULL THEN 1 ELSE 0 END,
-                        review_rating DESC,
-                        review_count DESC,
-                        id ASC
-                    LIMIT :limit
-                    """.replace(PLACE_SELECT_COLUMNS, LEGACY_PLACE_SELECT_COLUMNS),
             )
             .all()
         )
@@ -371,13 +273,6 @@ class PlaceRepository:
                       AND p.latitude IS NOT NULL
                       AND p.longitude IS NOT NULL
                     """,
-                fallback_query=f"""
-                    SELECT {PLACE_SELECT_COLUMNS}
-                    FROM places
-                    WHERE COALESCE(status, 'active') <> 'deleted'
-                      AND latitude IS NOT NULL
-                      AND longitude IS NOT NULL
-                    """.replace(PLACE_SELECT_COLUMNS, LEGACY_PLACE_SELECT_COLUMNS),
             )
             .all()
         )
@@ -413,67 +308,44 @@ class PlaceRepository:
         return self.create_local_place(name=name, address=address, rating=rating)
 
     def list_place_images(self, place_id: int, fallback_images: list[str] | None = None) -> list[str]:
-        try:
-            rows = (
-                self.db.execute(
-                    text(
-                        """
-                        SELECT image_url
-                        FROM place_images
-                        WHERE place_id = :place_id
-                        ORDER BY is_primary DESC, sort_order ASC, id ASC
-                        """
-                    ),
-                    {"place_id": place_id},
-                )
-                .mappings()
-                .all()
+        rows = (
+            self.db.execute(
+                text(
+                    """
+                    SELECT image_url
+                    FROM place_images
+                    WHERE place_id = :place_id
+                    ORDER BY is_primary DESC, sort_order ASC, id ASC
+                    """
+                ),
+                {"place_id": place_id},
             )
-        except DBAPIError:
-            self.db.rollback()
-            return fallback_images or []
+            .mappings()
+            .all()
+        )
 
         image_urls = [str(row["image_url"]) for row in rows if row.get("image_url")]
         return image_urls or (fallback_images or [])
 
     def replace_place_images(self, place_id: int, image_urls: list[str]) -> None:
         cleaned_urls = [url.strip() for url in image_urls if url and url.strip()]
-        try:
-            self.db.execute(text("DELETE FROM place_images WHERE place_id = :place_id"), {"place_id": place_id})
-            for index, image_url in enumerate(cleaned_urls):
-                self.db.execute(
-                    text(
-                        """
-                        INSERT INTO place_images (place_id, image_url, sort_order, is_primary)
-                        VALUES (:place_id, :image_url, :sort_order, :is_primary)
-                        """
-                    ),
-                    {
-                        "place_id": place_id,
-                        "image_url": image_url,
-                        "sort_order": index,
-                        "is_primary": index == 0,
-                    },
-                )
-            self.db.commit()
-        except DBAPIError:
-            self.db.rollback()
+        self.db.execute(text("DELETE FROM place_images WHERE place_id = :place_id"), {"place_id": place_id})
+        for index, image_url in enumerate(cleaned_urls):
             self.db.execute(
                 text(
                     """
-                    UPDATE places
-                    SET thumbnail = :thumbnail,
-                        images_json = :images_json
-                    WHERE id = :place_id
+                    INSERT INTO place_images (place_id, image_url, sort_order, is_primary)
+                    VALUES (:place_id, :image_url, :sort_order, :is_primary)
                     """
                 ),
                 {
                     "place_id": place_id,
-                    "thumbnail": cleaned_urls[0] if cleaned_urls else None,
-                    "images_json": json.dumps(cleaned_urls, ensure_ascii=False),
+                    "image_url": image_url,
+                    "sort_order": index,
+                    "is_primary": index == 0,
                 },
             )
-            self.db.commit()
+        self.db.commit()
 
     def create_local_place(
         self,
@@ -662,122 +534,99 @@ class PlaceRepository:
         new_average = round(((current_average * current_total) + int(rating)) / new_total, 2)
         rating_key = str(int(rating))
 
-        try:
-            existing_stats = (
-                self.db.execute(
-                    text(
-                        """
-                        SELECT
-                            rating_1_count,
-                            rating_2_count,
-                            rating_3_count,
-                            rating_4_count,
-                            rating_5_count
-                        FROM place_review_stats
-                        WHERE place_id = :place_id
-                        """
-                    ),
-                    {"place_id": place_id},
-                )
-                .mappings()
-                .first()
-            )
-            distribution = {
-                "1": int(existing_stats["rating_1_count"] or 0) if existing_stats else 0,
-                "2": int(existing_stats["rating_2_count"] or 0) if existing_stats else 0,
-                "3": int(existing_stats["rating_3_count"] or 0) if existing_stats else 0,
-                "4": int(existing_stats["rating_4_count"] or 0) if existing_stats else 0,
-                "5": int(existing_stats["rating_5_count"] or 0) if existing_stats else 0,
-            }
-            distribution[rating_key] = int(distribution.get(rating_key, 0)) + 1
-
-            if existing_stats:
-                self.db.execute(
-                    text(
-                        """
-                        UPDATE place_review_stats
-                        SET average_rating = :average_rating,
-                            review_count = :review_count,
-                            rating_1_count = :rating_1_count,
-                            rating_2_count = :rating_2_count,
-                            rating_3_count = :rating_3_count,
-                            rating_4_count = :rating_4_count,
-                            rating_5_count = :rating_5_count,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE place_id = :place_id
-                        """
-                    ),
-                    {
-                        "place_id": place_id,
-                        "average_rating": new_average,
-                        "review_count": new_total,
-                        "rating_1_count": distribution["1"],
-                        "rating_2_count": distribution["2"],
-                        "rating_3_count": distribution["3"],
-                        "rating_4_count": distribution["4"],
-                        "rating_5_count": distribution["5"],
-                    },
-                )
-            else:
-                self.db.execute(
-                    text(
-                        """
-                        INSERT INTO place_review_stats (
-                            place_id,
-                            average_rating,
-                            review_count,
-                            rating_1_count,
-                            rating_2_count,
-                            rating_3_count,
-                            rating_4_count,
-                            rating_5_count
-                        )
-                        VALUES (
-                            :place_id,
-                            :average_rating,
-                            :review_count,
-                            :rating_1_count,
-                            :rating_2_count,
-                            :rating_3_count,
-                            :rating_4_count,
-                            :rating_5_count
-                        )
-                        """
-                    ),
-                    {
-                        "place_id": place_id,
-                        "average_rating": new_average,
-                        "review_count": new_total,
-                        "rating_1_count": distribution["1"],
-                        "rating_2_count": distribution["2"],
-                        "rating_3_count": distribution["3"],
-                        "rating_4_count": distribution["4"],
-                        "rating_5_count": distribution["5"],
-                    },
-                )
-            self.db.commit()
-        except DBAPIError:
-            self.db.rollback()
-            updated_distribution = dict(place.reviews_per_rating or {})
-            updated_distribution[rating_key] = int(updated_distribution.get(rating_key, 0) or 0) + 1
+        existing_stats = (
             self.db.execute(
                 text(
                     """
-                    UPDATE places
-                    SET review_rating = :review_rating,
+                    SELECT
+                        rating_1_count,
+                        rating_2_count,
+                        rating_3_count,
+                        rating_4_count,
+                        rating_5_count
+                    FROM place_review_stats
+                    WHERE place_id = :place_id
+                    """
+                ),
+                {"place_id": place_id},
+            )
+            .mappings()
+            .first()
+        )
+        distribution = {
+            "1": int(existing_stats["rating_1_count"] or 0) if existing_stats else 0,
+            "2": int(existing_stats["rating_2_count"] or 0) if existing_stats else 0,
+            "3": int(existing_stats["rating_3_count"] or 0) if existing_stats else 0,
+            "4": int(existing_stats["rating_4_count"] or 0) if existing_stats else 0,
+            "5": int(existing_stats["rating_5_count"] or 0) if existing_stats else 0,
+        }
+        distribution[rating_key] = int(distribution.get(rating_key, 0)) + 1
+
+        if existing_stats:
+            self.db.execute(
+                text(
+                    """
+                    UPDATE place_review_stats
+                    SET average_rating = :average_rating,
                         review_count = :review_count,
-                        reviews_per_rating_json = :reviews_per_rating_json
-                    WHERE id = :place_id
+                        rating_1_count = :rating_1_count,
+                        rating_2_count = :rating_2_count,
+                        rating_3_count = :rating_3_count,
+                        rating_4_count = :rating_4_count,
+                        rating_5_count = :rating_5_count,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE place_id = :place_id
                     """
                 ),
                 {
                     "place_id": place_id,
-                    "review_rating": new_average,
+                    "average_rating": new_average,
                     "review_count": new_total,
-                    "reviews_per_rating_json": json.dumps(updated_distribution, ensure_ascii=False),
+                    "rating_1_count": distribution["1"],
+                    "rating_2_count": distribution["2"],
+                    "rating_3_count": distribution["3"],
+                    "rating_4_count": distribution["4"],
+                    "rating_5_count": distribution["5"],
                 },
             )
-            self.db.commit()
+        else:
+            self.db.execute(
+                text(
+                    """
+                    INSERT INTO place_review_stats (
+                        place_id,
+                        average_rating,
+                        review_count,
+                        rating_1_count,
+                        rating_2_count,
+                        rating_3_count,
+                        rating_4_count,
+                        rating_5_count
+                    )
+                    VALUES (
+                        :place_id,
+                        :average_rating,
+                        :review_count,
+                        :rating_1_count,
+                        :rating_2_count,
+                        :rating_3_count,
+                        :rating_4_count,
+                        :rating_5_count
+                    )
+                    """
+                ),
+                {
+                    "place_id": place_id,
+                    "average_rating": new_average,
+                    "review_count": new_total,
+                    "rating_1_count": distribution["1"],
+                    "rating_2_count": distribution["2"],
+                    "rating_3_count": distribution["3"],
+                    "rating_4_count": distribution["4"],
+                    "rating_5_count": distribution["5"],
+                },
+            )
+        self.db.commit()
 
         refreshed_place = self.get_by_id(place_id)
         if refreshed_place is None:

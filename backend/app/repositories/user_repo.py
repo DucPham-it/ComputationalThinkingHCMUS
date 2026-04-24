@@ -221,3 +221,27 @@ class UserRepository:
         if row is None:
             raise ValueError("User not found after update.")
         return self._to_user(row)
+
+    def update_avatar(self, *, user_id: int, avatar_url: str) -> User:
+        row = (
+            self.db.execute(
+                text(
+                    f"""
+                    UPDATE users
+                    SET avatar_url = :avatar_url
+                    WHERE id = :user_id
+                    RETURNING {self.USER_COLUMNS}
+                    """
+                ),
+                {
+                    "user_id": user_id,
+                    "avatar_url": avatar_url,
+                },
+            )
+            .mappings()
+            .first()
+        )
+        self.db.commit()
+        if row is None:
+            raise ValueError("User not found after avatar update.")
+        return self._to_user(row)

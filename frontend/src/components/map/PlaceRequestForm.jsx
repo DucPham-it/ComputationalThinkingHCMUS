@@ -2,17 +2,73 @@ import { useMemo, useState } from "react";
 import { Send, X } from "lucide-react";
 
 import { createPlaceRequest } from "../../services/placeRequestService";
+import { uploadPlaceImages, uploadReviewImages } from "../../services/uploadService";
+
+/**
+ * Place create/update/delete request form with optional image upload.
+ *
+ * Owner:
+ * - TV7 owns image upload fields in this form.
+ * - Place request approval flow remains shared/admin flow.
+ *
+ * File input:
+ * - targetPlace: selected map place or temporary map point.
+ * - onSubmitted/onCancel callbacks.
+ * - Place form fields and optional place/review image files.
+ *
+ * File output:
+ * - Uploads selected place/review image files to Supabase Storage.
+ * - Sends createPlaceRequest payload with image URL arrays.
+ */
 
 function getDatabasePlaceId(place) {
+  /**
+   * Owner:
+   * - TV6/TV7 shared helper.
+   *
+   * Input:
+   * - place: targetPlace selected from map.
+   *
+   * Output:
+   * - positive integer database id or null for temporary/external places.
+   */
   const numericId = Number(place?.id);
   return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
 }
 
 function parseUrls(rawValue) {
+  /**
+   * Owner:
+   * - TV7.
+   *
+   * Input:
+   * - rawValue: textarea content containing URLs separated by newline or comma.
+   *
+   * Output:
+   * - clean non-empty URL string array.
+   */
   return String(rawValue || "")
     .split(/\r?\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function getFiles(formData, name) {
+  /**
+   * Owner:
+   * - TV7.
+   *
+   * Input:
+   * - formData: submitted FormData.
+   * - name: file input field name.
+   *
+   * Output:
+   * - up to 8 non-empty File objects.
+   */
+  return formData
+    .getAll(name)
+    .filter((file) => file instanceof File && file.size > 0)
+    .slice(0, 8);
 }
 
 export default function PlaceRequestForm({ targetPlace, onSubmitted, onCancel }) {
@@ -28,8 +84,28 @@ export default function PlaceRequestForm({ targetPlace, onSubmitted, onCancel })
   }), [targetPlace]);
 
   async function handleSubmit(event) {
+    /**
+     * Owner:
+     * - TV7 for image upload behavior.
+     *
+     * Input:
+     * - submit event from place request form.
+     * - requestType state and targetPlace props.
+     * - form fields for place data, review data, image URLs, image files.
+     *
+     * Output:
+     * - uploads files to Supabase Storage.
+     * - merges manually-entered URLs with uploaded URLs.
+     * - submits createPlaceRequest payload.
+     * - sets status message and calls onSubmitted on success.
+     */
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const placeImageFiles = requestType === "delete" ? [] : getFiles(formData, "place_images");
+    const reviewImageFiles = getFiles(formData, "review_images");
+    const placeImageUrls = parseUrls(formData.get("place_image_urls"));
+    const reviewImageUrls = parseUrls(formData.get("review_image_urls"));
+
     const payload = {
       request_type: requestType,
       place_id: databasePlaceId,
@@ -46,13 +122,25 @@ export default function PlaceRequestForm({ targetPlace, onSubmitted, onCancel })
       request_note: String(formData.get("request_note") || "").trim() || null,
       review_content: String(formData.get("review_content") || "").trim() || null,
       review_rating: formData.get("review_rating") ? Number(formData.get("review_rating")) : null,
-      place_image_urls: parseUrls(formData.get("place_image_urls")),
-      review_image_urls: parseUrls(formData.get("review_image_urls")),
+      place_image_urls: placeImageUrls,
+      review_image_urls: reviewImageUrls,
     };
 
     try {
       setSubmitting(true);
       setStatus("");
+      if (placeImageFiles.length || reviewImageFiles.length) {
+        setStatus("Uploading images...");
+      }
+
+      const [uploadedPlaceImages, uploadedReviewImages] = await Promise.all([
+        placeImageFiles.length ? uploadPlaceImages(placeImageFiles) : Promise.resolve({ urls: [] }),
+        reviewImageFiles.length ? uploadReviewImages(reviewImageFiles) : Promise.resolve({ urls: [] }),
+      ]);
+
+      payload.place_image_urls = [...placeImageUrls, ...(uploadedPlaceImages.urls || [])];
+      payload.review_image_urls = [...reviewImageUrls, ...(uploadedReviewImages.urls || [])];
+
       await createPlaceRequest(payload);
       setStatus("Request submitted. An approved admin can review it now.");
       onSubmitted?.();
@@ -163,6 +251,17 @@ export default function PlaceRequestForm({ targetPlace, onSubmitted, onCancel })
       </div>
 
       <label style={{ display: "grid", gap: "8px", fontWeight: 700 }}>
+        Place image files
+        <input
+          name="place_images"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          disabled={requestType === "delete" || submitting}
+        />
+      </label>
+
+      <label style={{ display: "grid", gap: "8px", fontWeight: 700 }}>
         Review content
         <textarea name="review_content" rows={3} placeholder="Optional review to attach if admin approves." />
       </label>
@@ -170,6 +269,17 @@ export default function PlaceRequestForm({ targetPlace, onSubmitted, onCancel })
       <label style={{ display: "grid", gap: "8px", fontWeight: 700 }}>
         Review image URLs
         <textarea name="review_image_urls" rows={3} placeholder="One URL per line" />
+      </label>
+
+      <label style={{ display: "grid", gap: "8px", fontWeight: 700 }}>
+        Review image files
+        <input
+          name="review_images"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          disabled={submitting}
+        />
       </label>
 
       {status ? (
@@ -185,4 +295,3 @@ export default function PlaceRequestForm({ targetPlace, onSubmitted, onCancel })
     </form>
   );
 }
-

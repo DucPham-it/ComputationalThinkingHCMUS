@@ -1,9 +1,28 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { Camera, LogOut } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useApp } from "../hooks/useApp";
 import { updateProfile as updateProfileRequest } from "../services/authService";
+import { uploadAvatar } from "../services/uploadService";
+
+/**
+ * Profile completion/update page.
+ *
+ * Owner:
+ * - TV7 owns avatar upload behavior.
+ * - Existing auth/profile fields remain shared application flow.
+ *
+ * File input:
+ * - Current user from useAuth.
+ * - Profile form fields: first_name, last_name, birth_date, gender, address.
+ * - Optional avatar file.
+ *
+ * File output:
+ * - Updates profile through authService.
+ * - Uploads avatar to Supabase Storage when selected.
+ * - Updates auth user state with returned user payload.
+ */
 
 const pageStyles = {
   minHeight: "calc(100vh - 140px)",
@@ -62,6 +81,16 @@ const logoutStyles = {
 };
 
 function toOptionalValue(value) {
+  /**
+   * Owner:
+   * - Shared profile helper.
+   *
+   * Input:
+   * - value: raw form field value.
+   *
+   * Output:
+   * - trimmed string or null when empty.
+   */
   const normalized = String(value || "").trim();
   return normalized ? normalized : null;
 }
@@ -72,6 +101,8 @@ export default function Profile() {
   const { resetAppState } = useApp();
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || "");
 
   useEffect(() => {
     const token = window.localStorage.getItem("access_token");
@@ -80,7 +111,31 @@ export default function Profile() {
     }
   }, [navigate]);
 
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview(user?.avatar_url || "");
+      return undefined;
+    }
+
+    const previewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [avatarFile, user?.avatar_url]);
+
   async function handleSubmit(event) {
+    /**
+     * Owner:
+     * - TV7 for avatar upload part.
+     *
+     * Input:
+     * - submit event from profile form.
+     * - avatarFile state if user selected a new avatar.
+     *
+     * Output:
+     * - profile data saved.
+     * - avatar uploaded and user.avatar_url updated when avatarFile exists.
+     * - redirects to home on success or sets error on failure.
+     */
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
@@ -96,7 +151,12 @@ export default function Profile() {
 
     try {
       const auth = await updateProfileRequest(payload);
-      setUser(auth.user);
+      let nextUser = auth.user;
+      if (avatarFile) {
+        const avatar = await uploadAvatar(avatarFile);
+        nextUser = avatar.user;
+      }
+      setUser(nextUser);
       navigate("/");
     } catch (requestError) {
       setError(
@@ -106,6 +166,21 @@ export default function Profile() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleAvatarChange(event) {
+    /**
+     * Owner:
+     * - TV7.
+     *
+     * Input:
+     * - event.target.files[0] from avatar input.
+     *
+     * Output:
+     * - avatarFile state and preview effect update.
+     */
+    const file = event.target.files?.[0] || null;
+    setAvatarFile(file);
   }
 
   function handleLogout() {
@@ -123,6 +198,44 @@ export default function Profile() {
             Finish your account with personal details. Gender and address are optional.
           </p>
         </div>
+
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          <span
+            style={{
+              width: "88px",
+              height: "88px",
+              borderRadius: "50%",
+              background: avatarPreview
+                ? `url(${avatarPreview}) center/cover`
+                : "var(--color-primary-soft)",
+              display: "grid",
+              placeItems: "center",
+              color: "var(--color-primary)",
+              border: "1px solid rgba(37, 99, 235, 0.18)",
+              flexShrink: 0,
+            }}
+          >
+            {avatarPreview ? null : <Camera size={28} />}
+          </span>
+          <span style={{ display: "grid", gap: "6px" }}>
+            Avatar
+            <input
+              name="avatar"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={handleAvatarChange}
+              disabled={isSubmitting}
+            />
+          </span>
+        </label>
 
         <div style={gridStyles}>
           <label style={labelStyles}>

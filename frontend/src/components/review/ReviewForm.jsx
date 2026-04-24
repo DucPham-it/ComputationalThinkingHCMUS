@@ -1,7 +1,25 @@
-import { MessageSquarePlus, ShieldAlert, Star } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ImagePlus, MessageSquarePlus, ShieldAlert, Star, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { createReview } from "../../services/reviewService";
+import { uploadReviewImages } from "../../services/uploadService";
+
+/**
+ * Review creation form with optional image upload.
+ *
+ * Owner:
+ * - TV7: Media Upload + Review Avatar.
+ *
+ * File input:
+ * - placeId: database place id from PlaceDetail.
+ * - onSubmitted: optional callback after review is created.
+ * - User-selected review image files.
+ *
+ * File output:
+ * - Uploads review images to Supabase Storage.
+ * - Sends createReview payload with place_id, content, rating, image_urls.
+ * - Renders preview/remove state and submit errors.
+ */
 
 const RATING_OPTIONS = [5, 4, 3, 2, 1];
 
@@ -11,6 +29,9 @@ export default function ReviewForm({ placeId, onSubmitted }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [imageFiles, setImageFiles] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
+  const imageInputRef = useRef(null);
 
   const normalizedPlaceId = useMemo(() => {
     const numericId = Number(placeId);
@@ -19,7 +40,60 @@ export default function ReviewForm({ placeId, onSubmitted }) {
 
   const hasToken = typeof window !== "undefined" && Boolean(window.localStorage.getItem("access_token"));
 
+  useEffect(() => {
+    const previewUrls = imageFiles.map((file) => URL.createObjectURL(file));
+    setImagePreviews(previewUrls);
+    return () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [imageFiles]);
+
+  function handleImageChange(event) {
+    /**
+     * Owner:
+     * - TV7.
+     *
+     * Input:
+     * - event.target.files from review image input.
+     *
+     * Output:
+     * - imageFiles state with up to 8 non-empty files.
+     */
+    setImageFiles(Array.from(event.target.files || []).filter((file) => file.size > 0).slice(0, 8));
+  }
+
+  function removeImage(index) {
+    /**
+     * Owner:
+     * - TV7.
+     *
+     * Input:
+     * - index: preview/file index selected by user.
+     *
+     * Output:
+     * - removes that file from imageFiles and clears file input value.
+     */
+    setImageFiles((currentFiles) => currentFiles.filter((_, fileIndex) => fileIndex !== index));
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
+  }
+
   async function handleSubmit(event) {
+    /**
+     * Owner:
+     * - TV7.
+     *
+     * Input:
+     * - submit event from ReviewForm.
+     * - rating/content/imageFiles component state.
+     *
+     * Output:
+     * - uploads selected images first.
+     * - creates review with image_urls.
+     * - resets form and calls onSubmitted(result) on success.
+     * - sets user-facing error on validation/upload/API failure.
+     */
     event.preventDefault();
 
     if (!normalizedPlaceId) {
@@ -42,15 +116,20 @@ export default function ReviewForm({ placeId, onSubmitted }) {
       setError("");
       setSuccess("");
 
+      const uploadedImages = imageFiles.length ? await uploadReviewImages(imageFiles) : { urls: [] };
       const result = await createReview({
         place_id: normalizedPlaceId,
         content: content.trim(),
         rating: Number(rating),
-        image_urls: [],
+        image_urls: uploadedImages.urls || [],
       });
 
       setContent("");
       setRating(5);
+      setImageFiles([]);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+      }
       setSuccess(result.message || "Review submitted successfully.");
       onSubmitted?.(result);
     } catch (submitError) {
@@ -152,6 +231,78 @@ export default function ReviewForm({ placeId, onSubmitted }) {
           disabled={submitting}
           style={{ resize: "vertical", minHeight: "150px" }}
         />
+      </div>
+
+      <div style={{ display: "grid", gap: "10px" }}>
+        <label htmlFor="review-images" style={{ fontWeight: 600 }}>Review photos</label>
+        <label
+          htmlFor="review-images"
+          className="btn-outline"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            width: "fit-content",
+            padding: "10px 14px",
+            borderRadius: "14px",
+            cursor: submitting ? "not-allowed" : "pointer",
+          }}
+        >
+          <ImagePlus size={18} />
+          Select photos
+        </label>
+        <input
+          ref={imageInputRef}
+          id="review-images"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          onChange={handleImageChange}
+          disabled={submitting}
+          style={{ display: "none" }}
+        />
+        {imagePreviews.length ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+            {imagePreviews.map((previewUrl, index) => (
+              <div
+                key={previewUrl}
+                style={{
+                  width: "88px",
+                  height: "88px",
+                  position: "relative",
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                  background: `url(${previewUrl}) center/cover`,
+                  border: "1px solid rgba(15, 23, 42, 0.12)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => removeImage(index)}
+                  disabled={submitting}
+                  aria-label="Remove photo"
+                  style={{
+                    position: "absolute",
+                    right: "6px",
+                    top: "6px",
+                    width: "26px",
+                    height: "26px",
+                    borderRadius: "50%",
+                    padding: 0,
+                    display: "grid",
+                    placeItems: "center",
+                    background: "rgba(15, 23, 42, 0.72)",
+                    color: "#fff",
+                    border: 0,
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {error ? (

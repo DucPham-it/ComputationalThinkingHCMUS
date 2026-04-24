@@ -25,22 +25,46 @@ def build_test_session():
                 country TEXT,
                 latitude REAL,
                 longitude REAL,
-                review_rating REAL,
-                review_count INTEGER NOT NULL DEFAULT 0,
-                reviews_per_rating_json TEXT NOT NULL DEFAULT '{}',
                 open_hours_json TEXT NOT NULL DEFAULT '{}',
                 popular_times_json TEXT NOT NULL DEFAULT '{}',
                 price_range TEXT,
                 price_level INTEGER,
                 website TEXT,
                 phone TEXT,
-                thumbnail TEXT,
-                images_json TEXT NOT NULL DEFAULT '[]',
                 descriptions TEXT,
                 about_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT,
                 place_id TEXT UNIQUE,
                 cid TEXT UNIQUE
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE place_review_stats (
+                place_id INTEGER PRIMARY KEY,
+                average_rating REAL,
+                review_count INTEGER NOT NULL DEFAULT 0,
+                rating_1_count INTEGER NOT NULL DEFAULT 0,
+                rating_2_count INTEGER NOT NULL DEFAULT 0,
+                rating_3_count INTEGER NOT NULL DEFAULT 0,
+                rating_4_count INTEGER NOT NULL DEFAULT 0,
+                rating_5_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE place_images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                place_id INTEGER NOT NULL,
+                image_url TEXT NOT NULL,
+                title TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -59,16 +83,11 @@ def test_get_place_detail_reads_local_place_data():
                 address_text,
                 latitude,
                 longitude,
-                review_rating,
-                review_count,
-                reviews_per_rating_json,
                 open_hours_json,
                 popular_times_json,
                 price_range,
                 price_level,
                 phone,
-                thumbnail,
-                images_json,
                 descriptions,
                 about_json,
                 status,
@@ -82,16 +101,11 @@ def test_get_place_detail_reads_local_place_data():
                 '123 Test Street',
                 10.8,
                 106.7,
-                4.8,
-                1,
-                :reviews_per_rating_json,
                 :open_hours_json,
                 :popular_times_json,
                 '₫₫',
                 2,
                 '0909000000',
-                'https://example.com/pizza.jpg',
-                :images_json,
                 'Fresh pizza in the local catalog.',
                 :about_json,
                 'active',
@@ -103,13 +117,34 @@ def test_get_place_detail_reads_local_place_data():
         ),
         {
             "complete_address_json": json.dumps({"city": "Hồ Chí Minh"}),
-            "reviews_per_rating_json": json.dumps({"5": 1}),
             "open_hours_json": json.dumps({"Thứ Tư": ["10:00–22:00"]}, ensure_ascii=False),
             "popular_times_json": json.dumps({}),
-            "images_json": json.dumps(["https://example.com/pizza.jpg"]),
             "about_json": json.dumps([{"name": "Ăn tại chỗ", "enabled": True}], ensure_ascii=False),
         },
     ).scalar_one()
+    db.execute(
+        text(
+            """
+            INSERT INTO place_review_stats (
+                place_id,
+                average_rating,
+                review_count,
+                rating_5_count
+            )
+            VALUES (:place_id, 4.8, 1, 1)
+            """
+        ),
+        {"place_id": place_id},
+    )
+    db.execute(
+        text(
+            """
+            INSERT INTO place_images (place_id, image_url, sort_order, is_primary)
+            VALUES (:place_id, 'https://example.com/pizza.jpg', 0, 1)
+            """
+        ),
+        {"place_id": place_id},
+    )
     db.commit()
 
     response = get_place_detail(place_id, db)

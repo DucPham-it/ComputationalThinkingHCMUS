@@ -1,5 +1,17 @@
 """NLP preprocessing helpers for free-text search.
 
+Owner:
+- TV3: NLP Field Extraction.
+
+File input:
+- Raw natural-language query from recommendation search.
+- Supported text can be Vietnamese with accents, Vietnamese without accents, or
+  common English keywords.
+
+File output:
+- Normalized intent/filter fields used by recommender and filtering modules.
+- Backward-compatible search text fields for the existing local search flow.
+
 Purpose:
 - extract structured intent from Vietnamese or English user text
 - produce a normalized search plan for local DB search and external fallback
@@ -188,7 +200,30 @@ def _unique(items: list[str]) -> list[str]:
 
 
 def parse_search_text(query: str) -> dict:
-    """Extract structured fields and normalized search text from free-text query."""
+    """Extract structured fields and normalized search text from free-text query.
+
+    Owner:
+    - TV3 maintains this helper because it is the current NLP entry point.
+
+    Input:
+    - query: raw Vietnamese/English natural-language request from Home search.
+      Empty string is allowed and must not raise an exception.
+
+    Output:
+    - dict with:
+      - entertainment_type: normalized category or None
+      - budget_level: low/medium/high or None
+      - companion_type: solo/couple/family/friends or None
+      - time_slot: morning/afternoon/evening/night or None
+      - normalized_query: accent-stripped lowercase text
+      - local_query: terms optimized for local Supabase search
+      - external_query: terms reserved for external search fallback
+      - content_terms: remaining meaningful tokens after intent extraction
+
+    TODO TV3:
+    - Keep this function stable for existing code.
+    - Move richer parsing into parse_recommendation_language_contract.
+    """
     normalized_text = _normalize_text(query)
     entertainment_type = _extract_first_match(normalized_text, ENTERTAINMENT_PATTERNS)
     budget_level = _extract_first_match(normalized_text, BUDGET_PATTERNS)
@@ -235,3 +270,68 @@ def parse_search_text(query: str) -> dict:
         "external_query": " ".join(external_terms).strip(),
         "content_terms": content_tokens,
     }
+
+
+def parse_recommendation_language_contract(query: str) -> dict:
+    """TODO TV3: full NLP contract for natural-language recommendation input.
+
+    Owner:
+    - TV3.
+
+    Input:
+    - query: raw user text, for example "toi muon quan an re gan quan 5 toi nay".
+      The function must accept:
+      - Vietnamese with accents
+      - Vietnamese without accents
+      - short English keywords
+      - empty or unclear text
+
+    Output:
+    - dict with keys:
+      - intent: recommendation, route, compare, unknown
+      - entertainment_type: restaurant/cafe/museum/park/mall/movie_theater/hotel or None
+      - budget_level: low/medium/high or None
+      - companion_type: solo/couple/family/friends/kids or None
+      - time_slot: morning/afternoon/evening/night/weekend or None
+      - location_hint: free text location such as "quan 5"
+      - distance_hint_km: numeric distance if user mentions "trong 5km", "gan day", etc.
+      - require_open_now: true if user asks for places open now
+      - min_rating: numeric 0..5 if user asks "tren 4 sao"
+      - keywords: remaining useful words for text search
+      - confidence: 0..1
+      - missing_fields: list[str] that frontend can ask again
+
+    Implementation note:
+    - Keep parse_search_text backward-compatible.
+    - This function is intentionally empty so AI/NLP owner can implement and test it.
+    """
+    pass
+
+
+def extract_filter_fields_from_text(query: str) -> dict:
+    """TODO TV3: extract fields that should merge with explicit UI filters.
+
+    Owner:
+    - TV3 owns extraction.
+    - TV4 consumes the output in build_filter_plan.
+
+    Input:
+    - query: raw natural-language text from recommendation search.
+      Examples:
+      - "cafe yen tinh duoi 5km"
+      - "di voi gia dinh, dang mo cua, tren 4 sao"
+
+    Output:
+    - dict containing only filter fields found in text:
+      - max_distance_km
+      - min_rating
+      - budget_level
+      - preferred_types
+      - require_open_now
+      - companion_type
+      - start_time or time_slot
+
+    Conflict rule:
+    - UI filters win over NLP fields when both are present.
+    """
+    pass

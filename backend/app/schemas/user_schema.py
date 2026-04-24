@@ -57,6 +57,7 @@ class UserResponse(BaseModel):
     birth_date: date | None = None
     gender: str | None = None
     address: str | None = None
+    avatar_url: str | None = None
     is_admin: bool = False
 
 

@@ -3,10 +3,23 @@
 /**
  * Map page.
  *
+ * Owner:
+ * - TV6: Map Pick To Route.
+ *
+ * File input:
+ * - places prop or AppContext.recommendationPlaces.
+ * - Browser GPS/currentLocation from AppContext.
+ * - User clicks on markers or free map coordinates.
+ *
+ * File output:
+ * - AppContext.selectedPlace for RouteView.
+ * - Navigation to /route after destination pick.
+ * - Optional POST /recommendations/picks/{place_id} for database-backed places.
+ *
  * Intended purpose:
- * - show current user location
- * - show recommended place markers
- * - support marker click to open detail
+ * - show current user location.
+ * - show recommended place markers.
+ * - support marker click to open detail or pick as route destination.
  */
 
 import MapContainer from "../components/map/MapContainer";
@@ -21,6 +34,18 @@ import { addFavorite } from "../services/favoriteService";
 import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/placeService";
 
 function buildTemporaryMapPlace(point, address = null) {
+    /**
+     * Owner:
+     * - TV6.
+     *
+     * Input:
+     * - point: Leaflet click point with lat/lng.
+     * - address: optional resolved address text.
+     *
+     * Output:
+     * - temporary place-like object that can be shown on map and picked for route.
+     * - flags mark it as local-only, not viewable, and not saveable.
+     */
     const fallbackAddress = address || `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
     return {
         id: `temp-map-${point.lat}-${point.lng}-${Date.now()}`,
@@ -40,6 +65,16 @@ function buildTemporaryMapPlace(point, address = null) {
 }
 
 function sanitizePickedPlace(place) {
+    /**
+     * Owner:
+     * - TV6.
+     *
+     * Input:
+     * - place: map marker payload with temporary UI-only flags.
+     *
+     * Output:
+     * - clean place object safe to store in AppContext.selectedPlace.
+     */
     if (!place) {
         return place;
     }
@@ -55,8 +90,45 @@ function sanitizePickedPlace(place) {
 }
 
 function getDatabasePlaceId(place) {
+    /**
+     * Owner:
+     * - TV6.
+     *
+     * Input:
+     * - place: marker/resolved place object.
+     *
+     * Output:
+     * - positive integer database id when available.
+     * - null for temporary map points or external-only places.
+     */
     const numericId = Number(place?.id);
     return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
+}
+
+export function buildRouteDestinationFromMapPick(place) {
+    /**
+     * TODO TV6: normalize a map marker/place into route destination state.
+     *
+     * Owner:
+     * - TV6.
+     *
+     * Input:
+     * - place: marker payload from MarkerList or resolved map click:
+     *   - id: database place id or temporary id
+     *   - name: display name
+     *   - address: address text
+     *   - latitude/longitude or lat/lng
+     *   - photo_url, primary_type, can_view, can_save when available
+     *
+     * Output:
+     * - object for AppContext.selectedPlace:
+     *   { place_id, id, name, address, latitude, longitude, photo_url,
+     *     primary_type, source, can_view, can_save }
+     *
+     * Rule:
+     * - Database-backed place should call recordPlacePick(place.id).
+     * - Temporary map point should still navigate to Route, but cannot be saved/viewed.
+     */
 }
 
 export default function MapView({ places = [] }) {

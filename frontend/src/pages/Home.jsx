@@ -19,6 +19,25 @@ import { getCurrentBrowserLocation } from "../utils/geolocation";
 
 /**
  * Màn hình Home (Trang chủ)
+ *
+ * Owner:
+ * - TV2: Recommendation search/filter UI.
+ *
+ * File input:
+ * - User natural-language query from SearchBar.
+ * - FilterPanel state once TV2 wires controlled filters.
+ * - Browser GPS/currentLocation from AppContext.
+ * - Authentication/profile state from useAuth.
+ *
+ * File output:
+ * - Calls fetchRecommendations with query, filters, latitude, longitude.
+ * - Stores top 10 returned places in local state and AppContext.
+ * - Renders loading, empty, error, and RecommendationList states.
+ *
+ * TODO TV2:
+ * - Add controlled filter state.
+ * - Merge buildRecommendationFilterPayload output into handleSearch.
+ * - Ensure query-only, filter-only, and query+filter cases all call the API.
  */
 export default function Home() {
     const { isAuthenticated, hasCompletedProfile } = useAuth();

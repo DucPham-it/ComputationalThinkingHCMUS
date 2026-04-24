@@ -1,9 +1,21 @@
-"""User picked places repository."""
+"""User picked places repository.
+
+Owner:
+- TV6 records map/route picks.
+- TV5 consumes picked places for personalization.
+
+File input:
+- Authenticated user id.
+- Database place id selected from map marker or route destination.
+
+File output:
+- user_place_picks rows with newest picked_at timestamp.
+- Recent picked Place objects for ranking.
+"""
 
 from __future__ import annotations
 
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -16,6 +28,17 @@ class PickRepository:
         self.db = db
 
     def _trim_picks(self, user_id: int) -> None:
+        """Keep newest place picks for one user.
+
+        Owner:
+        - TV6.
+
+        Input:
+        - user_id: authenticated user id.
+
+        Output:
+        - deletes older pick rows beyond settings.max_picked_places_per_user.
+        """
         max_items = max(1, int(settings.max_picked_places_per_user))
         self.db.execute(
             text(
@@ -38,6 +61,20 @@ class PickRepository:
         )
 
     def add_pick(self, user_id: int, place_id: int) -> None:
+        """Record or refresh one picked place.
+
+        Owner:
+        - TV6.
+
+        Input:
+        - user_id: authenticated user id.
+        - place_id: database place id selected from map/route.
+
+        Output:
+        - no return value.
+        - upserts user_place_picks and commits.
+        - refreshes picked_at when the same user picks the same place again.
+        """
         self.db.execute(
             text(
                 """
@@ -53,6 +90,20 @@ class PickRepository:
         self.db.commit()
 
     def list_by_user(self, user_id: int, limit: int = 20) -> list[Place]:
+        """List recent picked places for personalization.
+
+        Owner:
+        - TV6 provides data.
+        - TV5 uses the returned places in ranking.
+
+        Input:
+        - user_id: authenticated user id.
+        - limit: max picks to return, newest first.
+
+        Output:
+        - list[Place] with id, name, address, rating, review_count,
+          coordinates, price, image, phone, and primary_type.
+        """
         query = """
             SELECT
                 p.id,
@@ -82,33 +133,7 @@ class PickRepository:
             ORDER BY upp.picked_at DESC
             LIMIT :limit
         """
-        legacy_query = """
-            SELECT
-                p.id,
-                p.title AS name,
-                p.address_text AS address,
-                p.place_id AS external_place_id,
-                p.review_rating AS rating,
-                p.review_count,
-                p.latitude,
-                p.longitude,
-                p.price_level,
-                p.price_range,
-                NULL AS open_now,
-                p.thumbnail AS photo_url,
-                p.phone AS contact_phone,
-                p.category AS primary_type
-            FROM user_place_picks AS upp
-            JOIN places AS p ON p.id = upp.place_id
-            WHERE upp.user_id = :user_id
-            ORDER BY upp.picked_at DESC
-            LIMIT :limit
-        """
-        try:
-            rows = self.db.execute(text(query), {"user_id": user_id, "limit": limit}).mappings().all()
-        except DBAPIError:
-            self.db.rollback()
-            rows = self.db.execute(text(legacy_query), {"user_id": user_id, "limit": limit}).mappings().all()
+        rows = self.db.execute(text(query), {"user_id": user_id, "limit": limit}).mappings().all()
         return [
             Place(
                 id=int(row["id"]),

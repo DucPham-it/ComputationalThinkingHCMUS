@@ -50,17 +50,12 @@ def build_test_session():
                 country TEXT,
                 latitude REAL,
                 longitude REAL,
-                review_rating REAL,
-                review_count INTEGER NOT NULL DEFAULT 0,
-                reviews_per_rating_json TEXT NOT NULL DEFAULT '{}',
                 open_hours_json TEXT NOT NULL DEFAULT '{}',
                 popular_times_json TEXT NOT NULL DEFAULT '{}',
                 price_range TEXT,
                 price_level INTEGER,
                 website TEXT,
                 phone TEXT,
-                thumbnail TEXT,
-                images_json TEXT NOT NULL DEFAULT '[]',
                 descriptions TEXT,
                 about_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT,
@@ -78,8 +73,47 @@ def build_test_session():
                 content TEXT NOT NULL,
                 rating INTEGER NOT NULL,
                 reviewed_at TEXT,
-                image_urls_json TEXT NOT NULL DEFAULT '[]',
                 is_imported INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE place_review_stats (
+                place_id INTEGER PRIMARY KEY,
+                average_rating REAL,
+                review_count INTEGER NOT NULL DEFAULT 0,
+                rating_1_count INTEGER NOT NULL DEFAULT 0,
+                rating_2_count INTEGER NOT NULL DEFAULT 0,
+                rating_3_count INTEGER NOT NULL DEFAULT 0,
+                rating_4_count INTEGER NOT NULL DEFAULT 0,
+                rating_5_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE place_images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                place_id INTEGER NOT NULL,
+                image_url TEXT NOT NULL,
+                title TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE review_images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                review_id INTEGER NOT NULL,
+                image_url TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -107,14 +141,10 @@ def seed_place(db):
                 category,
                 complete_address_json,
                 address_text,
-                review_rating,
-                review_count,
-                reviews_per_rating_json,
                 open_hours_json,
                 popular_times_json,
                 price_range,
                 price_level,
-                images_json,
                 about_json,
                 status,
                 place_id,
@@ -126,14 +156,10 @@ def seed_place(db):
                 'Nhà hàng Việt Nam',
                 :complete_address_json,
                 '123 Test Street',
-                0,
-                0,
-                '{}',
                 '{}',
                 '{}',
                 '₫₫',
                 2,
-                '[]',
                 '[]',
                 'active',
                 'sample-place-id',
@@ -193,13 +219,28 @@ def test_register_login_review_and_favorites_flow():
     assert review_response.review_count == 1
     assert review_response.average_rating == 5.0
 
+    second_review_response = create_review(
+        ReviewCreateRequest(
+            place_id=1,
+            content="Pretty good",
+            rating=4,
+            image_urls=["https://example.com/review.jpg"],
+        ),
+        current_user,
+        db,
+    )
+
+    assert second_review_response.review_count == 2
+    assert second_review_response.average_rating == 4.5
+
     reviews_payload = list_reviews(1, db)
     favorites_payload = list_favorites(current_user, db)
 
-    assert reviews_payload["items"][0].content == "Very good"
+    assert reviews_payload["items"][0].content == "Pretty good"
+    assert reviews_payload["items"][0].image_urls == ["https://example.com/review.jpg"]
     assert reviews_payload["items"][0].user_name == "traveler01"
     assert favorites_payload["items"][0]["id"] == 1
-    assert favorites_payload["items"][0]["rating"] == 5.0
+    assert favorites_payload["items"][0]["rating"] == 4.5
 
     db.close()
 

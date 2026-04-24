@@ -57,23 +57,18 @@ pip install -r requirements.txt
 ```bash
 DATABASE_URL=postgresql://...
 DATABASE_SSL_REQUIRE=false
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_STORAGE_AVATAR_BUCKET=avatars
+SUPABASE_STORAGE_PLACE_BUCKET=place-images
+SUPABASE_STORAGE_REVIEW_BUCKET=review-images
 NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 OSRM_BASE_URL=https://router.project-osrm.org
 WEATHER_API_KEY=
 JWT_SECRET=your_jwt_secret
 ```
 
-5. Chuẩn bị schema và CSV:
-
-```bash
-python ../split_places_csv.py ../places1.csv --output-dir ../csv_output
-```
-
-Sau đó upload các file trong `csv_output/` lên Supabase theo thứ tự gợi ý:
-`users.csv`, `places.csv`, `place_review_stats.csv`, `place_images.csv`, `reviews.csv`, `review_images.csv`.
-Schema tham chiếu nằm ở `supabase_schema_reference.sql`. Backend không còn chạy import CSV.
-
-6. Chạy server:
+5. Chạy server:
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -99,6 +94,7 @@ npm install
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000/api/v1
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 ```
 
 4. Chạy frontend:
@@ -115,13 +111,8 @@ Frontend mặc định sẽ chạy tại `http://localhost:5173`
 - Backend xử lý NLP nội bộ trước, tìm trực tiếp trong Supabase, dùng OSM/Nominatim để geocode/reverse geocode và OSRM để dựng route
 - Người dùng có thể đăng ký/đăng nhập, thêm đánh giá, lưu yêu thích và xem gợi ý du lịch
 - Người dùng có thể đề xuất thêm/sửa/xóa địa điểm từ bản đồ; admin đã được duyệt có thể approve/reject trong `/admin`
+- Gợi ý trả top 10 địa điểm theo ngôn ngữ tự nhiên, filter, lịch sử pick/favorite/search; mỗi user giữ tối đa 80 lịch sử tìm kiếm.
 
 ## Kiểm tra nhanh
 
 - Backend health: `http://localhost:8000/health`
-
-## Ghi chú
-- Dự án dùng `DATABASE_URL` để cấu hình kết nối database
-- Schema Supabase do bạn quản lý trực tiếp; thư mục migration SQL cũ không còn là luồng chính
-- Rating tổng, số lượng review, ảnh place, ảnh review được tách ra các bảng riêng: `place_review_stats`, `place_images`, `review_images`
-- Nếu cập nhật file CSV, chạy lại `python split_places_csv.py ...` rồi import CSV thủ công trên Supabase

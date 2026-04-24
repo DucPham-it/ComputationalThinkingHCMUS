@@ -4,6 +4,29 @@ from pydantic import BaseModel, Field
 
 
 class RecommendationQuery(BaseModel):
+    """Structured recommendation input.
+
+    Owner:
+    - TV1 owns this request schema contract.
+    - TV2 mirrors these fields in the frontend filter payload.
+
+    Input:
+    - query: natural-language request, for example "toi muon di cafe yen tinh gan day"
+    - destination/manual_address: optional location context typed by user
+    - entertainment_type: category filter extracted by NLP or selected by UI
+    - budget_level: low, medium, high
+    - start_time: user intended visit time/time slot
+    - companion_type: solo, couple, family, friends
+    - latitude/longitude: browser GPS or map-selected point
+    - max_distance_km: radius constraint
+    - preferred_types: explicit UI category list
+    - require_open_now: only suggest currently-open places when true
+    - min_rating: minimum average rating filter
+
+    Output:
+    - used by routes/recommendations.py to produce top 10 PlaceResponse-like dicts.
+    """
+
     query: str = ""
     destination: str | None = None
     entertainment_type: str | None = None
@@ -15,6 +38,8 @@ class RecommendationQuery(BaseModel):
     manual_address: str | None = None
     max_distance_km: float | None = Field(default=5, ge=0)
     preferred_types: list[str] = Field(default_factory=list)
+    require_open_now: bool = False
+    min_rating: float | None = Field(default=None, ge=0, le=5)
 
 
 class ResolvePlacePointRequest(BaseModel):
@@ -23,6 +48,20 @@ class ResolvePlacePointRequest(BaseModel):
 
 
 class PlaceResponse(BaseModel):
+    """Shared place response shape.
+
+    Owner:
+    - TV1 keeps API shape stable.
+    - TV5 may add score/explanation-related fields after ranking work.
+
+    Input:
+    - place data from local database, external search, or recommendation pipeline.
+
+    Output:
+    - JSON-safe place payload consumed by RecommendationList, MapView, and
+      PlaceDetail.
+    """
+
     id: int | str
     name: str
     address: str

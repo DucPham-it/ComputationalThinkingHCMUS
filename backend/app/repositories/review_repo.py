@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
-
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.models.review import Review
+from app.services.upload_storage import default_avatar_url
 
 
 class ReviewRepository:
@@ -73,17 +72,6 @@ class ReviewRepository:
 
     @staticmethod
     def _to_review(row) -> Review:
-        raw_image_urls = row.get("image_urls_json")
-        if isinstance(raw_image_urls, str):
-            try:
-                image_urls = json.loads(raw_image_urls)
-            except ValueError:
-                image_urls = []
-        elif isinstance(raw_image_urls, list):
-            image_urls = raw_image_urls
-        else:
-            image_urls = []
-
         return Review(
             id=int(row["id"]),
             user_id=int(row["user_id"]),
@@ -91,82 +79,47 @@ class ReviewRepository:
             content=row["content"],
             rating=int(row["rating"]),
             user_name=row.get("user_name"),
-            user_avatar_url=row.get("user_avatar_url"),
+            user_avatar_url=row.get("user_avatar_url") or default_avatar_url(),
             reviewed_at=row.get("reviewed_at"),
-            image_urls=image_urls,
+            image_urls=[],
             is_virtual_user=bool(row.get("is_virtual_user") or False),
         )
 
     def list_by_place(self, place_id: int) -> list[Review]:
-        try:
-            rows = (
-                self.db.execute(
-                    text(
-                        """
-                        SELECT
-                            r.id,
-                            r.user_id,
-                            r.place_id,
-                            r.content,
-                            r.rating,
-                            r.reviewed_at,
-                            NULL AS image_urls_json,
-                            u.user_name,
-                            u.avatar_url AS user_avatar_url,
-                            u.is_virtual AS is_virtual_user
-                        FROM reviews AS r
-                        JOIN users AS u ON u.id = r.user_id
-                        WHERE r.place_id = :place_id
-                        ORDER BY
-                            CASE WHEN NULLIF(CAST(r.reviewed_at AS TEXT), '') IS NULL THEN 1 ELSE 0 END,
-                            r.reviewed_at DESC,
-                            r.created_at DESC,
-                            r.id DESC
-                        """
-                    ),
-                    {"place_id": place_id},
-                )
-                .mappings()
-                .all()
+        rows = (
+            self.db.execute(
+                text(
+                    """
+                    SELECT
+                        r.id,
+                        r.user_id,
+                        r.place_id,
+                        r.content,
+                        r.rating,
+                        r.reviewed_at,
+                        u.user_name,
+                        u.avatar_url AS user_avatar_url,
+                        u.is_virtual AS is_virtual_user
+                    FROM reviews AS r
+                    JOIN users AS u ON u.id = r.user_id
+                    WHERE r.place_id = :place_id
+                    ORDER BY
+                        CASE WHEN NULLIF(CAST(r.reviewed_at AS TEXT), '') IS NULL THEN 1 ELSE 0 END,
+                        r.reviewed_at DESC,
+                        r.created_at DESC,
+                        r.id DESC
+                    """
+                ),
+                {"place_id": place_id},
             )
-            reviews = [self._to_review(row) for row in rows]
-            images_by_review = self._list_review_images([review.id for review in reviews])
-            for review in reviews:
-                review.image_urls = images_by_review.get(review.id, [])
-            return reviews
-        except DBAPIError:
-            self.db.rollback()
-            rows = (
-                self.db.execute(
-                    text(
-                        """
-                        SELECT
-                            r.id,
-                            r.user_id,
-                            r.place_id,
-                            r.content,
-                            r.rating,
-                            r.reviewed_at,
-                            r.image_urls_json,
-                            u.user_name,
-                            u.avatar_url AS user_avatar_url,
-                            u.is_virtual AS is_virtual_user
-                        FROM reviews AS r
-                        JOIN users AS u ON u.id = r.user_id
-                        WHERE r.place_id = :place_id
-                        ORDER BY
-                            CASE WHEN NULLIF(CAST(r.reviewed_at AS TEXT), '') IS NULL THEN 1 ELSE 0 END,
-                            r.reviewed_at DESC,
-                            r.created_at DESC,
-                            r.id DESC
-                        """
-                    ),
-                    {"place_id": place_id},
-                )
-                .mappings()
-                .all()
-            )
-            return [self._to_review(row) for row in rows]
+            .mappings()
+            .all()
+        )
+        reviews = [self._to_review(row) for row in rows]
+        images_by_review = self._list_review_images([review.id for review in reviews])
+        for review in reviews:
+            review.image_urls = images_by_review.get(review.id, [])
+        return reviews
 
     def create_review(
         self,
@@ -176,81 +129,41 @@ class ReviewRepository:
         rating: int,
         image_urls: list[str] | None = None,
     ) -> Review:
-        try:
-            row = (
-                self.db.execute(
-                    text(
-                        """
-                        INSERT INTO reviews (
-                            user_id,
-                            place_id,
-                            content,
-                            rating,
-                            reviewed_at,
-                            is_imported
-                        )
-                        VALUES (
-                            :user_id,
-                            :place_id,
-                            :content,
-                            :rating,
-                            CAST(CURRENT_TIMESTAMP AS TEXT),
-                            FALSE
-                        )
-                        RETURNING id, user_id, place_id, content, rating, reviewed_at, NULL AS image_urls_json
-                        """
-                    ),
-                    {
-                        "user_id": user_id,
-                        "place_id": place_id,
-                        "content": content,
-                        "rating": rating,
-                    },
-                )
-                .mappings()
-                .one()
+        row = (
+            self.db.execute(
+                text(
+                    """
+                    INSERT INTO reviews (
+                        user_id,
+                        place_id,
+                        content,
+                        rating,
+                        reviewed_at,
+                        is_imported
+                    )
+                    VALUES (
+                        :user_id,
+                        :place_id,
+                        :content,
+                        :rating,
+                        CAST(CURRENT_TIMESTAMP AS TEXT),
+                        FALSE
+                    )
+                    RETURNING id, user_id, place_id, content, rating, reviewed_at
+                    """
+                ),
+                {
+                    "user_id": user_id,
+                    "place_id": place_id,
+                    "content": content,
+                    "rating": rating,
+                },
             )
-            self.db.commit()
-            self._add_review_images(int(row["id"]), image_urls or [])
-        except DBAPIError:
-            self.db.rollback()
-            row = (
-                self.db.execute(
-                    text(
-                        """
-                        INSERT INTO reviews (
-                            user_id,
-                            place_id,
-                            content,
-                            rating,
-                            reviewed_at,
-                            image_urls_json,
-                            is_imported
-                        )
-                        VALUES (
-                            :user_id,
-                            :place_id,
-                            :content,
-                            :rating,
-                            CAST(CURRENT_TIMESTAMP AS TEXT),
-                            :image_urls_json,
-                            FALSE
-                        )
-                        RETURNING id, user_id, place_id, content, rating, reviewed_at, image_urls_json
-                        """
-                    ),
-                    {
-                        "user_id": user_id,
-                        "place_id": place_id,
-                        "content": content,
-                        "rating": rating,
-                        "image_urls_json": json.dumps(image_urls or [], ensure_ascii=False),
-                    },
-                )
-                .mappings()
-                .one()
-            )
-            self.db.commit()
+            .mappings()
+            .one()
+        )
+        self.db.commit()
+        self._add_review_images(int(row["id"]), image_urls or [])
 
         hydrated_row = (
             self.db.execute(
@@ -263,7 +176,6 @@ class ReviewRepository:
                         r.content,
                         r.rating,
                         r.reviewed_at,
-                        NULL AS image_urls_json,
                         u.user_name,
                         u.avatar_url AS user_avatar_url,
                         u.is_virtual AS is_virtual_user

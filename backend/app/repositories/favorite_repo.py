@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -87,33 +86,7 @@ class FavoriteRepository:
             ORDER BY f.id DESC
             LIMIT :limit
         """
-        legacy_query = """
-            SELECT
-                p.id,
-                p.title AS name,
-                p.address_text AS address,
-                p.place_id AS external_place_id,
-                p.review_rating AS rating,
-                p.review_count,
-                p.latitude,
-                p.longitude,
-                p.price_level,
-                p.price_range,
-                NULL AS open_now,
-                p.thumbnail AS photo_url,
-                p.phone AS contact_phone,
-                p.category AS primary_type
-            FROM favorites AS f
-            JOIN places AS p ON p.id = f.place_id
-            WHERE f.user_id = :user_id
-            ORDER BY f.id DESC
-            LIMIT :limit
-        """
-        try:
-            rows = self.db.execute(text(query), {"user_id": user_id, "limit": limit}).mappings().all()
-        except DBAPIError:
-            self.db.rollback()
-            rows = self.db.execute(text(legacy_query), {"user_id": user_id, "limit": limit}).mappings().all()
+        rows = self.db.execute(text(query), {"user_id": user_id, "limit": limit}).mappings().all()
         return [self._to_place(row) for row in rows]
 
     def list_place_ids_by_user(self, user_id: int) -> list[int]:

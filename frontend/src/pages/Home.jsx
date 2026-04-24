@@ -19,7 +19,6 @@ import { getCurrentBrowserLocation } from "../utils/geolocation";
 
 /**
  * Màn hình Home (Trang chủ)
- * Đã nâng cấp giao diện UI/UX nhưng vẫn giữ nguyên cấu trúc vận hành API gốc.
  */
 export default function Home() {
     const { isAuthenticated, hasCompletedProfile } = useAuth();

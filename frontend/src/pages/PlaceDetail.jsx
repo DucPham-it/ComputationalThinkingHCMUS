@@ -31,16 +31,30 @@ export default function PlaceDetail() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionSuccess, setActionSuccess] = useState("");
+  const numericPlaceId = Number(id);
+  const hasValidPlaceId = Number.isInteger(numericPlaceId) && numericPlaceId > 0;
 
   useEffect(() => {
     async function fetchData() {
+      if (!hasValidPlaceId) {
+        setPlace(null);
+        setReviews([]);
+        setError("This OSM-only point is not available as a database place detail.");
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError("");
+        setActionError("");
+        setActionSuccess("");
 
         const [placeRes, reviewRes] = await Promise.all([
-          fetchPlaceDetail(id),
-          fetchReviews(id),
+          fetchPlaceDetail(numericPlaceId),
+          fetchReviews(numericPlaceId),
         ]);
 
         setPlace(placeRes);
@@ -53,7 +67,42 @@ export default function PlaceDetail() {
     }
 
     fetchData();
-  }, [id]);
+  }, [id, hasValidPlaceId, numericPlaceId]);
+
+  async function handlePickPlace() {
+    if (!place || !hasValidPlaceId) {
+      return;
+    }
+
+    try {
+      setActionError("");
+      setActionSuccess("");
+      await recordPlacePick(numericPlaceId);
+      setSelectedPlace(place);
+      navigate("/route");
+    } catch (err) {
+      console.error("Failed to record place pick", err);
+      const detail = err?.response?.data?.detail;
+      setActionError(detail || "We could not save this pick to your account. Please log in and try again.");
+    }
+  }
+
+  async function handleSavePlace() {
+    if (!hasValidPlaceId) {
+      return;
+    }
+
+    try {
+      setActionError("");
+      setActionSuccess("");
+      await addFavorite(numericPlaceId);
+      setActionSuccess("Place saved to your favorites.");
+    } catch (err) {
+      console.error("Failed to save favorite", err);
+      const detail = err?.response?.data?.detail;
+      setActionError(detail || "We could not save this place. Please log in and try again.");
+    }
+  }
 
   function handleReviewSubmitted(result) {
     if (result?.latest_review) {
@@ -69,8 +118,6 @@ export default function PlaceDetail() {
         ...currentPlace,
         rating: result?.average_rating ?? currentPlace.rating,
         review_count: result?.review_count ?? currentPlace.review_count,
-        web_rating: result?.average_rating ?? currentPlace.web_rating,
-        web_review_count: result?.review_count ?? currentPlace.web_review_count,
       };
     });
   }
@@ -91,26 +138,14 @@ export default function PlaceDetail() {
             <button
               className="btn-primary"
               style={{ padding: "10px 16px", borderRadius: "14px", fontWeight: 700 }}
-              onClick={() => {
-                recordPlacePick(place.id).catch((err) => {
-                  console.error("Failed to record place pick", err);
-                });
-                setSelectedPlace(place);
-                navigate("/route");
-              }}
+              onClick={handlePickPlace}
             >
               Pick This Place
             </button>
             <button
               className="btn-outline"
               style={{ padding: "10px 16px", borderRadius: "14px", fontWeight: 700 }}
-              onClick={async () => {
-                try {
-                  await addFavorite(place.id);
-                } catch (err) {
-                  console.error("Failed to save favorite", err);
-                }
-              }}
+              onClick={handleSavePlace}
             >
               Save Place
             </button>
@@ -145,19 +180,9 @@ export default function PlaceDetail() {
               <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
                 <Star size={18} fill="var(--color-accent)" color="var(--color-accent)" />
                 <div>
-                  <strong style={{ display: "block" }}>Web {formatRating(place.web_rating)}</strong>
+                  <strong style={{ display: "block" }}>{formatRating(place.rating)}</strong>
                   <span style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>
-                    {place.web_review_count ?? reviews.length} community reviews
-                  </span>
-                </div>
-              </div>
-
-              <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
-                <Star size={18} color="#94a3b8" />
-                <div>
-                  <strong style={{ display: "block" }}>Google {formatRating(place.google_rating)}</strong>
-                  <span style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>
-                    {place.google_review_count ?? "No Google count"} ratings
+                    {place.review_count ?? reviews.length} community reviews
                   </span>
                 </div>
               </div>
@@ -188,13 +213,45 @@ export default function PlaceDetail() {
             <p style={{ margin: 0, color: "var(--color-text)", lineHeight: 1.8 }}>
               {place.description || "No detailed description is available for this place yet."}
             </p>
+
+            {actionError ? (
+              <p
+                style={{
+                  margin: 0,
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  background: "#fef2f2",
+                  color: "#b91c1c",
+                  border: "1px solid rgba(220, 38, 38, 0.15)",
+                  fontWeight: 600,
+                }}
+              >
+                {actionError}
+              </p>
+            ) : null}
+
+            {actionSuccess ? (
+              <p
+                style={{
+                  margin: 0,
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  background: "#ecfdf5",
+                  color: "#047857",
+                  border: "1px solid rgba(16, 185, 129, 0.18)",
+                  fontWeight: 600,
+                }}
+              >
+                {actionSuccess}
+              </p>
+            ) : null}
           </div>
         </div>
       </Section>
 
       <Section
         title="Reviews"
-        subtitle="Community reviews from people who used this web app are shown separately from the Google Maps rating."
+        subtitle="Reviews are loaded from the local database, including imported source reviews and new community feedback."
       >
         <ReviewList reviews={reviews} />
       </Section>
@@ -203,7 +260,7 @@ export default function PlaceDetail() {
         title="Write Your Review"
         subtitle="Your experience helps improve the recommendation quality for the next search."
       >
-        <ReviewForm placeId={id} onSubmitted={handleReviewSubmitted} />
+        <ReviewForm placeId={numericPlaceId} onSubmitted={handleReviewSubmitted} />
       </Section>
     </div>
   );

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
+from app.repositories.admin_repo import AdminRepository
 from app.repositories.user_repo import UserRepository
 from app.schemas.user_schema import (
     AuthResponse,
@@ -16,7 +17,14 @@ from app.schemas.user_schema import (
 router = APIRouter()
 
 
-def _auth_response(message: str, user, access_token: str | None = None) -> AuthResponse:
+def _auth_response(
+    message: str,
+    user,
+    *,
+    db: Session,
+    access_token: str | None = None,
+) -> AuthResponse:
+    is_admin = AdminRepository(db).is_approved_admin(user.id)
     return AuthResponse(
         message=message,
         user=UserResponse(
@@ -28,6 +36,7 @@ def _auth_response(message: str, user, access_token: str | None = None) -> AuthR
             birth_date=user.birth_date,
             gender=user.gender,
             address=user.address,
+            is_admin=is_admin,
         ),
         access_token=access_token,
     )
@@ -38,7 +47,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
     """Authenticate user."""
     user_repo = UserRepository(db)
     user = user_repo.get_by_identifier(payload.identifier)
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if user is None or user.is_virtual or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username/email or password.",
@@ -47,6 +56,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
     return _auth_response(
         message="Login successful.",
         user=user,
+        db=db,
         access_token=create_access_token(user.id, user.email),
     )
 
@@ -78,6 +88,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> AuthRes
     return _auth_response(
         message="Register successful.",
         user=user,
+        db=db,
         access_token=create_access_token(user.id, user.email),
     )
 
@@ -108,4 +119,5 @@ def update_profile(
     return _auth_response(
         message="Profile updated successfully.",
         user=user,
+        db=db,
     )

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import httpx
 
-from app.services.geocoding_service import geocode_address
-
 OPEN_METEO_ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 REQUEST_TIMEOUT_SECONDS = 10
 
@@ -46,12 +44,6 @@ def get_weather_summary(city: str = "", latitude: float | None = None, longitude
     resolved_city = city.strip()
     resolved_latitude = latitude
     resolved_longitude = longitude
-
-    if (resolved_latitude is None or resolved_longitude is None) and resolved_city:
-        geocoded = geocode_address(resolved_city)
-        resolved_city = geocoded.get("formatted_address") or resolved_city
-        resolved_latitude = geocoded.get("latitude")
-        resolved_longitude = geocoded.get("longitude")
 
     if resolved_latitude is None or resolved_longitude is None:
         return {

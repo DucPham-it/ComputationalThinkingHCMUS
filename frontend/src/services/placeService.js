@@ -40,5 +40,11 @@ export async function resolvePlaceFromCoordinates({ latitude, longitude }) {
     latitude,
     longitude,
   });
-  return response.data;
+  const data = response.data;
+  return {
+    ...data,
+    _canView: data.can_view,
+    _canSave: data.can_save,
+    _isLocalOnly: data.is_local_only,
+  };
 }

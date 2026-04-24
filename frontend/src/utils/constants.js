@@ -4,7 +4,7 @@
 export const APP_NAME = "Travel Recommendation App";
 
 /**
- * Common Google place types used by project.
+ * Common normalized place types used by the recommendation UI.
  */
 export const PLACE_TYPES = [
   "clothing_store",

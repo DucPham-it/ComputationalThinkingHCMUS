@@ -12,23 +12,20 @@ import { createContext, useEffect, useMemo, useState } from "react";
 export const AppContext = createContext(null);
 
 const APP_STATE_STORAGE_KEY = "app_shared_state";
+const DEFAULT_APP_STATE = {
+  selectedPlace: null,
+  currentLocation: null,
+  recommendationPlaces: [],
+};
 
 function readStoredAppState() {
   if (typeof window === "undefined") {
-    return {
-      selectedPlace: null,
-      currentLocation: null,
-      recommendationPlaces: [],
-    };
+    return DEFAULT_APP_STATE;
   }
 
   const rawState = window.localStorage.getItem(APP_STATE_STORAGE_KEY);
   if (!rawState) {
-    return {
-      selectedPlace: null,
-      currentLocation: null,
-      recommendationPlaces: [],
-    };
+    return DEFAULT_APP_STATE;
   }
 
   try {
@@ -40,11 +37,7 @@ function readStoredAppState() {
     };
   } catch {
     window.localStorage.removeItem(APP_STATE_STORAGE_KEY);
-    return {
-      selectedPlace: null,
-      currentLocation: null,
-      recommendationPlaces: [],
-    };
+    return DEFAULT_APP_STATE;
   }
 }
 
@@ -71,6 +64,16 @@ export function AppProvider({ children }) {
     );
   }, [currentLocation, recommendationPlaces, selectedPlace]);
 
+  function resetAppState() {
+    setSelectedPlace(DEFAULT_APP_STATE.selectedPlace);
+    setCurrentLocation(DEFAULT_APP_STATE.currentLocation);
+    setRecommendationPlaces(DEFAULT_APP_STATE.recommendationPlaces);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(APP_STATE_STORAGE_KEY);
+    }
+  }
+
   const value = useMemo(
     () => ({
       selectedPlace,
@@ -78,7 +81,8 @@ export function AppProvider({ children }) {
       currentLocation,
       setCurrentLocation,
       recommendationPlaces,
-      setRecommendationPlaces
+      setRecommendationPlaces,
+      resetAppState
     }),
     [currentLocation, recommendationPlaces, selectedPlace]
   );

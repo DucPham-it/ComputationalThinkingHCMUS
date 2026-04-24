@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { LogOut } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import { useApp } from "../hooks/useApp";
 import { updateProfile as updateProfileRequest } from "../services/authService";
 
 const pageStyles = {
@@ -47,6 +49,18 @@ const submitStyles = {
   fontWeight: 700
 };
 
+const logoutStyles = {
+  width: "100%",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  fontSize: "1rem",
+  fontWeight: 700,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px"
+};
+
 function toOptionalValue(value) {
   const normalized = String(value || "").trim();
   return normalized ? normalized : null;
@@ -54,7 +68,8 @@ function toOptionalValue(value) {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, setUser } = useAuth();
+  const { user, setUser, logout } = useAuth();
+  const { resetAppState } = useApp();
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -91,6 +106,12 @@ export default function Profile() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleLogout() {
+    logout();
+    resetAppState();
+    navigate("/login", { replace: true });
   }
 
   return (
@@ -164,6 +185,25 @@ export default function Profile() {
         <button className="btn-primary" style={submitStyles} disabled={isSubmitting}>
           {isSubmitting ? "Saving profile..." : "Save Profile"}
         </button>
+
+        <button
+          type="button"
+          className="btn-outline"
+          style={logoutStyles}
+          onClick={handleLogout}
+          disabled={isSubmitting}
+        >
+          <LogOut size={18} />
+          Logout
+        </button>
+
+        <Link
+          to="/admin"
+          className="btn-outline"
+          style={{ ...logoutStyles, textDecoration: "none" }}
+        >
+          Admin console / request admin
+        </Link>
 
         {error ? <div style={statusStyles}>{error}</div> : null}
       </form>

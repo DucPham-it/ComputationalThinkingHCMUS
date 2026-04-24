@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.session import get_db
+from app.repositories.admin_repo import AdminRepository
 from app.repositories.user_repo import UserRepository
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -52,4 +53,17 @@ def require_completed_profile(
             detail="Please complete your profile before using this feature.",
         )
 
+    return current_user
+
+
+def require_admin(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Require the current user to be an approved admin."""
+    if not AdminRepository(db).is_approved_admin(current_user["id"]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Approved admin access is required.",
+        )
     return current_user

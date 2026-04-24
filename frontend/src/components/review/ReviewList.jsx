@@ -66,9 +66,11 @@ export default function ReviewList({
         >
           <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: "1rem" }}>Review #{review.id}</h3>
+              <h3 style={{ margin: 0, fontSize: "1rem" }}>
+                {review.user_name || `Review #${review.id}`}
+              </h3>
               <p style={{ margin: "4px 0 0 0", fontSize: "0.9rem" }}>
-                Place ID: {review.place_id}
+                {review.reviewed_at || `Place ID: ${review.place_id}`}
               </p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -82,6 +84,25 @@ export default function ReviewList({
           <p style={{ margin: 0, color: "var(--color-text)", lineHeight: 1.7 }}>
             {review.content}
           </p>
+
+          {review.image_urls?.length ? (
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              {review.image_urls.slice(0, 3).map((imageUrl) => (
+                <img
+                  key={imageUrl}
+                  src={imageUrl}
+                  alt={review.user_name || "Review image"}
+                  style={{
+                    width: "92px",
+                    height: "92px",
+                    objectFit: "cover",
+                    borderRadius: "14px",
+                    border: "1px solid var(--color-border)",
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
         </article>
       ))}
     </div>

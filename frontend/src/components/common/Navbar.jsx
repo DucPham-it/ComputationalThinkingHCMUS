@@ -9,7 +9,8 @@ import {
     User, 
     Menu, 
     X, 
-    Compass
+    Compass,
+    ShieldCheck
 } from "lucide-react";
 
 /**
@@ -21,7 +22,7 @@ import {
  * - Micro-interactions: Hiệu ứng hover và click mượt mà (smooth transitions).
  */
 export default function Navbar() {
-    const { isAuthenticated, hasCompletedProfile } = useAuth();
+    const { user, isAuthenticated, hasCompletedProfile } = useAuth();
     const location = useLocation();
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -57,6 +58,9 @@ export default function Navbar() {
         { path: "/route", label: "Route", icon: Navigation },
         { path: "/favorites", label: "Saved", icon: Heart },
     ];
+    if (isAuthenticated && user?.is_admin) {
+        navLinks.push({ path: "/admin", label: "Admin", icon: ShieldCheck });
+    }
     const profileLabel = hasCompletedProfile ? "Profile" : "Complete Profile";
 
     return (
@@ -137,7 +141,6 @@ export default function Navbar() {
                     {/* Dải phân cách dọc (Visual Divider) */}
                     <div style={{ width: "1px", height: "24px", background: "var(--color-border)", margin: "0 4px" }} />
 
-                    {/* CALL TO ACTION: Nút đăng nhập nổi bật */}
                     <Link 
                         to={isAuthenticated ? "/profile" : "/login"} 
                         className="btn-primary press"

@@ -1,4 +1,6 @@
-from sqlalchemy import create_engine
+import json
+
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from fastapi import HTTPException
@@ -18,14 +20,17 @@ def build_test_session():
             """
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_name TEXT NOT NULL,
+                user_name TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 first_name TEXT,
                 last_name TEXT,
                 birth_date TEXT,
                 gender TEXT,
-                address TEXT
+                address TEXT,
+                avatar_url TEXT,
+                is_virtual INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -33,17 +38,34 @@ def build_test_session():
             """
             CREATE TABLE places (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                address TEXT NOT NULL,
-                rating REAL,
-                external_place_id TEXT UNIQUE,
+                title TEXT NOT NULL,
+                category TEXT,
+                complete_address_json TEXT,
+                address_text TEXT NOT NULL,
+                borough TEXT,
+                street TEXT,
+                city TEXT,
+                postal_code TEXT,
+                state TEXT,
+                country TEXT,
                 latitude REAL,
                 longitude REAL,
+                review_rating REAL,
+                review_count INTEGER NOT NULL DEFAULT 0,
+                reviews_per_rating_json TEXT NOT NULL DEFAULT '{}',
+                open_hours_json TEXT NOT NULL DEFAULT '{}',
+                popular_times_json TEXT NOT NULL DEFAULT '{}',
+                price_range TEXT,
                 price_level INTEGER,
-                open_now BOOLEAN,
-                photo_url TEXT,
-                contact_phone TEXT,
-                primary_type TEXT
+                website TEXT,
+                phone TEXT,
+                thumbnail TEXT,
+                images_json TEXT NOT NULL DEFAULT '[]',
+                descriptions TEXT,
+                about_json TEXT NOT NULL DEFAULT '[]',
+                status TEXT,
+                place_id TEXT UNIQUE,
+                cid TEXT UNIQUE
             )
             """
         )
@@ -54,7 +76,11 @@ def build_test_session():
                 user_id INTEGER NOT NULL,
                 place_id INTEGER NOT NULL,
                 content TEXT NOT NULL,
-                rating INTEGER NOT NULL
+                rating INTEGER NOT NULL,
+                reviewed_at TEXT,
+                image_urls_json TEXT NOT NULL DEFAULT '[]',
+                is_imported INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -71,8 +97,58 @@ def build_test_session():
     return sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
 
+def seed_place(db):
+    db.execute(
+        text(
+            """
+            INSERT INTO places (
+                id,
+                title,
+                category,
+                complete_address_json,
+                address_text,
+                review_rating,
+                review_count,
+                reviews_per_rating_json,
+                open_hours_json,
+                popular_times_json,
+                price_range,
+                price_level,
+                images_json,
+                about_json,
+                status,
+                place_id,
+                cid
+            )
+            VALUES (
+                1,
+                'Nhà hàng thử nghiệm',
+                'Nhà hàng Việt Nam',
+                :complete_address_json,
+                '123 Test Street',
+                0,
+                0,
+                '{}',
+                '{}',
+                '{}',
+                '₫₫',
+                2,
+                '[]',
+                '[]',
+                'active',
+                'sample-place-id',
+                'sample-cid'
+            )
+            """
+        ),
+        {"complete_address_json": json.dumps({"city": "Hồ Chí Minh"})},
+    )
+    db.commit()
+
+
 def test_register_login_review_and_favorites_flow():
     db = build_test_session()
+    seed_place(db)
 
     register_response = register(
         RegisterRequest(
@@ -121,13 +197,16 @@ def test_register_login_review_and_favorites_flow():
     favorites_payload = list_favorites(current_user, db)
 
     assert reviews_payload["items"][0].content == "Very good"
+    assert reviews_payload["items"][0].user_name == "traveler01"
     assert favorites_payload["items"][0]["id"] == 1
+    assert favorites_payload["items"][0]["rating"] == 5.0
 
     db.close()
 
 
 def test_require_completed_profile_rejects_incomplete_profile():
     db = build_test_session()
+    seed_place(db)
     register(
         RegisterRequest(
             user_name="traveler02",

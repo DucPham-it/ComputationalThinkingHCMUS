@@ -19,6 +19,11 @@ class RouteStep(BaseModel):
     duration_text: str | None = None
 
 
+class RoutePoint(BaseModel):
+    lat: float
+    lng: float
+
+
 class RouteResponse(BaseModel):
     """Output for route guidance screen."""
 
@@ -26,5 +31,7 @@ class RouteResponse(BaseModel):
     destination: str
     distance_text: str
     duration_text: str
-    polyline: str | None = None
+    distance_km: float | None = None
+    duration_seconds: int | None = None
+    path: list[RoutePoint] = []
     steps: list[RouteStep] = []

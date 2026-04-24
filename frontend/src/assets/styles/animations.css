@@ -2,10 +2,9 @@
    CSS VARIABLES FOR ANIMATIONS (Biến cấu hình chuyển động)
    ========================================================================== */
 :root {
-    /* Đường cong chuyển động tự nhiên, tạo cảm giác mượt mà và cao cấp */
-    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* Hiệu ứng nảy nhẹ (bouncy) */
-    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);   /* Nhanh lúc đầu, chậm dần về cuối */
-    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);    /* Chuyển động đều đặn, tự nhiên */
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); 
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);   
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);   
 }
 
 /* ==========================================================================

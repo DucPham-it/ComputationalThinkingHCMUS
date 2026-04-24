@@ -1,119 +1,111 @@
-﻿/**
- * Marker list component.
- *
- * Input:
- * - places: list of places with coordinates
- * - onPlaceSelect: callback when a place is selected (optional)
- *
- * Output:
- * - rendered markers on map with InfoWindow
+/**
+ * Marker list component for Leaflet.
  */
 
-import { Marker, InfoWindow } from "@react-google-maps/api";
+import { CircleMarker, Popup } from "react-leaflet";
 import { useState, useCallback, useEffect } from "react";
 import PlacePopupCard from "./PlacePopupCard";
 
-function buildMarkerIcon(color, scale = 9) {
-    if (!window.google?.maps) {
-        return undefined;
-    }
-
-    return {
-        path: window.google.maps.SymbolPath.CIRCLE,
-        scale,
-        fillColor: color,
-        fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 2,
-    };
+function buildMarkerStyle(color, radius = 9) {
+  return {
+    radius,
+    pathOptions: {
+      color: "#ffffff",
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 1,
+    },
+  };
 }
 
 export default function MarkerList({
-    places = [],
-    onPlaceSelect,
-    onPickPlace,
-    onViewPlace,
-    onSavePlace,
-    onDismissPlace,
-    primaryActionLabel,
-    selectedPlaceId,
-    selectionModeLabel,
-    cancelActionLabel,
-}) { //onPlaceSelect: Callback to notify the parent when the user clicks a marker
-    const [selected, setSelected] = useState(null);
-    const markerIcon = buildMarkerIcon("#dc2626");
-    const selectedMarkerIcon = buildMarkerIcon("#f59e0b", 10);
+  places = [],
+  onPlaceSelect,
+  onPickPlace,
+  onViewPlace,
+  onSavePlace,
+  onSuggestChange,
+  onDismissPlace,
+  primaryActionLabel,
+  selectedPlaceId,
+  selectionModeLabel,
+  cancelActionLabel,
+}) {
+  const [selected, setSelected] = useState(null);
+  const markerStyle = buildMarkerStyle("#dc2626");
+  const selectedMarkerStyle = buildMarkerStyle("#f59e0b", 10);
 
-    useEffect(() => {
-        if (!selectedPlaceId) {
-            setSelected(null);
-            return;
-        }
-
-        const matchedPlace = places.find((place) => place.id === selectedPlaceId);
-        if (matchedPlace) {
-            setSelected(matchedPlace);
-            return;
-        }
-        setSelected(null);
-    }, [places, selectedPlaceId]);
-
-    const handleMarkerClick = useCallback((place) => {
-        setSelected(place);
-        if (onPlaceSelect) onPlaceSelect(place);
-    }, [onPlaceSelect]);
-
-    const handleCloseClick = useCallback(() => {
-        if (selected && onDismissPlace) {
-            onDismissPlace(selected);
-        }
-        setSelected(null);
-    }, [onDismissPlace, selected]);
-
-    // Early return if no places
-    if (!places || places.length === 0) {
-        return null;
+  useEffect(() => {
+    if (!selectedPlaceId) {
+      setSelected(null);
+      return;
     }
 
-    return (
-        <>
-            {places.map((place) => {
-                const lat = place.lat ?? place.latitude;
-                const lng = place.lng ?? place.longitude;
+    const matchedPlace = places.find((place) => place.id === selectedPlaceId);
+    setSelected(matchedPlace || null);
+  }, [places, selectedPlaceId]);
 
-                if (lat == null || lng == null) {
-                    return null;
-                }
+  const handleMarkerClick = useCallback(
+    (place) => {
+      setSelected(place);
+      onPlaceSelect?.(place);
+    },
+    [onPlaceSelect]
+  );
 
-                return (
-                    <Marker
-                        key={place.id}
-                        position={{ lat, lng }}
-                        onClick={() => handleMarkerClick(place)}
-                        icon={selected?.id === place.id ? selectedMarkerIcon : markerIcon} // Change the icon based on state: green if selected, red if default
-                        animation={selected?.id === place.id ? 1 : undefined} // Animation bounce when marker is selected
-                        title={place.name}
-                    >
-                        {selected?.id === place.id && (
-                            <InfoWindow
-                                onCloseClick={handleCloseClick}
-                                options={{ maxWidth: 250 }}
-                            >
-                                <PlacePopupCard
-                                    place={place}
-                                    onViewPlace={onViewPlace}
-                                    onSavePlace={onSavePlace}
-                                    onPrimaryAction={onPickPlace}
-                                    onCancelSelection={onDismissPlace ? handleCloseClick : undefined}
-                                    primaryActionLabel={primaryActionLabel}
-                                    selectionModeLabel={selectionModeLabel}
-                                    cancelActionLabel={cancelActionLabel}
-                                />
-                            </InfoWindow>
-                        )}
-                    </Marker>
-                );
-            })}
-        </>
-    );
+  const handleCloseClick = useCallback(() => {
+    if (selected && onDismissPlace) {
+      onDismissPlace(selected);
+    }
+    setSelected(null);
+  }, [onDismissPlace, selected]);
+
+  if (!places.length) {
+    return null;
+  }
+
+  return (
+    <>
+      {places.map((place) => {
+        const lat = place.lat ?? place.latitude;
+        const lng = place.lng ?? place.longitude;
+
+        if (lat == null || lng == null) {
+          return null;
+        }
+
+        const markerAppearance =
+          selected?.id === place.id ? selectedMarkerStyle : markerStyle;
+
+        return (
+          <CircleMarker
+            key={place.id}
+            center={[lat, lng]}
+            radius={markerAppearance.radius}
+            pathOptions={markerAppearance.pathOptions}
+            eventHandlers={{
+              click: () => handleMarkerClick(place),
+              popupclose: handleCloseClick,
+            }}
+          >
+            {selected?.id === place.id ? (
+              <Popup closeButton>
+                <PlacePopupCard
+                  place={place}
+                  onViewPlace={onViewPlace}
+                  onSavePlace={onSavePlace}
+                  onSuggestChange={onSuggestChange}
+                  onPrimaryAction={onPickPlace}
+                  onCancelSelection={onDismissPlace ? handleCloseClick : undefined}
+                  primaryActionLabel={primaryActionLabel}
+                  selectionModeLabel={selectionModeLabel}
+                  cancelActionLabel={cancelActionLabel}
+                />
+              </Popup>
+            ) : null}
+          </CircleMarker>
+        );
+      })}
+    </>
+  );
 }

@@ -11,8 +11,9 @@
 
 import MapContainer from "../components/map/MapContainer";
 import MarkerList from "../components/map/MarkerList";
+import PlaceRequestForm from "../components/map/PlaceRequestForm";
 import { useState, useEffect } from "react";
-import { Marker } from "@react-google-maps/api";
+import { CircleMarker, Tooltip } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../hooks/useApp";
 import { getCurrentBrowserLocation } from "../utils/geolocation";
@@ -28,10 +29,8 @@ function buildTemporaryMapPlace(point, address = null) {
         latitude: point.lat,
         longitude: point.lng,
         photo_url: null,
-        google_rating: null,
-        google_review_count: 0,
-        web_rating: null,
-        web_review_count: 0,
+        rating: null,
+        review_count: 0,
         distance_km: null,
         _isTemporaryMapSelection: true,
         _isLocalOnly: true,
@@ -55,6 +54,11 @@ function sanitizePickedPlace(place) {
     return cleanPlace;
 }
 
+function getDatabasePlaceId(place) {
+    const numericId = Number(place?.id);
+    return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
+}
+
 export default function MapView({ places = [] }) {
     const navigate = useNavigate();
     const {
@@ -66,6 +70,7 @@ export default function MapView({ places = [] }) {
     } = useApp();
     const [mapCenter, setMapCenter] = useState({ lat: 10.7769, lng: 106.7009 });
     const [selectedPlaceId, setSelectedPlaceId] = useState(null);
+    const [requestTargetPlace, setRequestTargetPlace] = useState(null);
     const mapPlaces = places.length ? places : recommendationPlaces;
 
     function mergePlaces(nextPlace) {
@@ -133,12 +138,13 @@ export default function MapView({ places = [] }) {
     };
 
     async function handleSavePlace(place) {
-        if (place._canSave === false) {
+        const databasePlaceId = getDatabasePlaceId(place);
+        if (place._canSave === false || place.can_save === false || databasePlaceId === null) {
             return;
         }
 
         try {
-            await addFavorite(place.id);
+            await addFavorite(databasePlaceId);
             confirmPlace(place);
         } catch (error) {
             console.error("Failed to save place", error);
@@ -146,15 +152,17 @@ export default function MapView({ places = [] }) {
     }
 
     function handleViewPlace(place) {
-        if (place._canView === false) {
+        const databasePlaceId = getDatabasePlaceId(place);
+        if (place._canView === false || place.can_view === false || databasePlaceId === null) {
             return;
         }
-        navigate(`/places/${place.id}`);
+        navigate(`/places/${databasePlaceId}`);
     }
 
     function handlePickPlace(place) {
-        if (typeof place.id === "number") {
-            recordPlacePick(place.id).catch((error) => {
+        const databasePlaceId = getDatabasePlaceId(place);
+        if (databasePlaceId !== null) {
+            recordPlacePick(databasePlaceId).catch((error) => {
                 console.error("Failed to record place pick", error);
             });
         }
@@ -162,6 +170,10 @@ export default function MapView({ places = [] }) {
         confirmPlace(place);
         setPickedPlace(sanitizePickedPlace(place));
         navigate("/route");
+    }
+
+    function handleSuggestChange(place) {
+        setRequestTargetPlace(place);
     }
 
     async function handleMapClick(point) {
@@ -195,16 +207,15 @@ export default function MapView({ places = [] }) {
         }
     }
 
-    const userMarkerIcon = window.google?.maps
-        ? {
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 8,
-              fillColor: "#2563eb",
-              fillOpacity: 1,
-              strokeColor: "#ffffff",
-              strokeWeight: 2,
-          }
-        : undefined;
+    const userMarkerStyle = {
+        radius: 8,
+        pathOptions: {
+            color: "#ffffff",
+            weight: 2,
+            fillColor: "#2563eb",
+            fillOpacity: 1,
+        },
+    };
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -215,11 +226,13 @@ export default function MapView({ places = [] }) {
                 onMapClick={handleMapClick}
             >
                 {currentLocation ? (
-                    <Marker
-                        position={currentLocation}
-                        title="Your current location"
-                        icon={userMarkerIcon}
-                    />
+                    <CircleMarker
+                        center={[currentLocation.lat, currentLocation.lng]}
+                        radius={userMarkerStyle.radius}
+                        pathOptions={userMarkerStyle.pathOptions}
+                    >
+                        <Tooltip>Your current location</Tooltip>
+                    </CircleMarker>
                 ) : null}
                 <MarkerList
                     places={mapPlaces}
@@ -227,6 +240,7 @@ export default function MapView({ places = [] }) {
                     onViewPlace={handleViewPlace}
                     onSavePlace={handleSavePlace}
                     onPickPlace={handlePickPlace}
+                    onSuggestChange={handleSuggestChange}
                     onDismissPlace={dismissPlace}
                     primaryActionLabel="Pick destination"
                     selectedPlaceId={selectedPlaceId}
@@ -234,6 +248,10 @@ export default function MapView({ places = [] }) {
                     cancelActionLabel="Cancel pin"
                 />
             </MapContainer>
+            <PlaceRequestForm
+                targetPlace={requestTargetPlace}
+                onCancel={() => setRequestTargetPlace(null)}
+            />
         </div>
     );
 }

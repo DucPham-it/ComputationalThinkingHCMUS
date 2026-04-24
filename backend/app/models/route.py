@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class Route:
     """Route summary entity.
 
-    Stores condensed route information from Directions API.
+    Stores condensed route information from the backend route planner.
     """
 
     origin: str

@@ -15,6 +15,11 @@ import { useApp } from "../../hooks/useApp";
 import { addFavorite } from "../../services/favoriteService";
 import { recordPlacePick } from "../../services/placeService";
 
+function getNumericPlaceId(place) {
+    const numericId = Number(place?.id);
+    return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
+}
+
 /**
  * PlaceCard Component - Thẻ hiển thị thông tin địa điểm (Advanced UI)
  * * Các tính năng nâng cấp:
@@ -28,21 +33,40 @@ export default function PlaceCard({ place }) {
     const { setSelectedPlace } = useApp();
     const [isSaved, setIsSaved] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [interactionError, setInteractionError] = useState("");
 
     useEffect(() => {
         setIsSaved(false);
         setSaving(false);
+        setInteractionError("");
     }, [place.id]);
 
+    const numericPlaceId = getNumericPlaceId(place);
+    const canViewPlace = place?._canView !== false && place?.can_view !== false && numericPlaceId !== null;
+    const canSavePlace = place?._canSave !== false && place?.can_save !== false && numericPlaceId !== null;
+
     function handleClick() {
-        navigate(`/places/${place.id}`);
+        if (!canViewPlace) {
+            setInteractionError("This OSM point is not in the local database yet, so it has no detail page.");
+            return;
+        }
+
+        navigate(`/places/${numericPlaceId}`);
     }
 
-    function handlePick(event) {
+    async function handlePick(event) {
         event.stopPropagation();
-        recordPlacePick(place.id).catch((error) => {
-            console.error("Failed to record place pick", error);
-        });
+        setInteractionError("");
+
+        if (numericPlaceId !== null) {
+            try {
+                await recordPlacePick(numericPlaceId);
+            } catch (error) {
+                console.error("Failed to record place pick", error);
+                setInteractionError("Picked for routing, but we could not save this interaction to your account.");
+            }
+        }
+
         setSelectedPlace(place);
         navigate("/route");
     }
@@ -53,12 +77,20 @@ export default function PlaceCard({ place }) {
             return;
         }
 
+        if (!canSavePlace) {
+            setInteractionError("Only database places can be saved. OSM-only points can still be used for routing.");
+            return;
+        }
+
         try {
             setSaving(true);
-            await addFavorite(place.id);
+            setInteractionError("");
+            await addFavorite(numericPlaceId);
             setIsSaved(true);
         } catch (error) {
             console.error("Failed to save place", error);
+            const detail = error?.response?.data?.detail;
+            setInteractionError(detail || "We could not save this place. Please log in and try again.");
         } finally {
             setSaving(false);
         }
@@ -74,7 +106,7 @@ export default function PlaceCard({ place }) {
         <div
             className="card fade-in hover-lift"
             style={{ 
-                cursor: "pointer",
+                cursor: canViewPlace ? "pointer" : "default",
                 padding: 0, // Xóa padding mặc định của thẻ card để banner chạm viền
                 display: "flex",
                 flexDirection: "column",
@@ -227,6 +259,7 @@ export default function PlaceCard({ place }) {
                             e.stopPropagation();
                             handleClick();
                         }}
+                        disabled={!canViewPlace}
                     >
                         <span>View</span>
                         <ChevronRight size={18} />
@@ -244,7 +277,7 @@ export default function PlaceCard({ place }) {
                             fontWeight: 700
                         }}
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || isSaved || !canSavePlace}
                     >
                         <Heart size={18} fill={isSaved ? "currentColor" : "none"} />
                         <span>{isSaved ? "Saved" : saving ? "Saving" : "Save"}</span>
@@ -267,6 +300,22 @@ export default function PlaceCard({ place }) {
                         <Route size={18} />
                     </button>
                 </div>
+
+                {interactionError ? (
+                    <p
+                        style={{
+                            margin: 0,
+                            padding: "10px 12px",
+                            borderRadius: "12px",
+                            background: "#fef2f2",
+                            color: "#b91c1c",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                        }}
+                    >
+                        {interactionError}
+                    </p>
+                ) : null}
             </div>
         </div>
     );

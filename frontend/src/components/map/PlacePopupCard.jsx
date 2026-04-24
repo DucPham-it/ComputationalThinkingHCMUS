@@ -1,19 +1,26 @@
-import { Heart, MapPin, Route, Star, ExternalLink } from "lucide-react";
+import { Heart, MapPin, Route, Star, ExternalLink, MessageSquarePlus } from "lucide-react";
 
 import { formatRating } from "../../utils/formatter";
+
+function hasDatabasePlaceId(place) {
+  const numericId = Number(place?.id);
+  return Number.isInteger(numericId) && numericId > 0;
+}
 
 export default function PlacePopupCard({
   place,
   onViewPlace,
   onSavePlace,
+  onSuggestChange,
   onPrimaryAction,
   onCancelSelection,
   primaryActionLabel = "Pick",
   selectionModeLabel,
   cancelActionLabel = "Cancel pin",
 }) {
-  const canViewPlace = place?._canView !== false;
-  const canSavePlace = place?._canSave !== false;
+  const isDatabasePlace = hasDatabasePlaceId(place);
+  const canViewPlace = place?._canView !== false && place?.can_view !== false && isDatabasePlace;
+  const canSavePlace = place?._canSave !== false && place?.can_save !== false && isDatabasePlace;
 
   return (
     <div
@@ -71,24 +78,15 @@ export default function PlacePopupCard({
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 700 }}>
               <Star size={14} color="#f59e0b" fill="#f59e0b" />
-              Web {formatRating(place.web_rating)}
+              {formatRating(place.rating)}
             </span>
             <span style={{ color: "#64748b" }}>
-              {place.web_review_count ?? place.review_count ?? 0} reviews
+              {place.review_count ?? 0} reviews
             </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
-              <Star size={13} color="#94a3b8" />
-              Google {formatRating(place.google_rating)}
-            </span>
-            {place.google_review_count ? (
-              <span style={{ color: "#64748b" }}>{place.google_review_count} ratings</span>
-            ) : null}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#64748b" }}>
             <MapPin size={13} />
-            <span>{place.distance_km ?? "N/A"} km by route</span>
+            <span>{place.distance_km ?? "N/A"} km away</span>
           </div>
         </div>
 
@@ -127,6 +125,17 @@ export default function PlacePopupCard({
             {primaryActionLabel}
           </button>
         </div>
+
+        {onSuggestChange ? (
+          <button
+            className="btn-outline"
+            style={{ padding: "8px 10px", borderRadius: "10px", fontWeight: 700 }}
+            onClick={() => onSuggestChange(place)}
+          >
+            <MessageSquarePlus size={14} style={{ marginRight: "4px" }} />
+            Suggest add/edit/delete
+          </button>
+        ) : null}
 
         {onCancelSelection ? (
           <button

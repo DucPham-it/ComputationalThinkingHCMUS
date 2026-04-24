@@ -12,6 +12,7 @@ import Favorites from "../pages/Favorites";
 import Login from "../pages/Login";
 import Register from "../pages/Register";
 import Profile from "../pages/Profile";
+import Admin from "../pages/Admin";
 
 export default function AppRoutes() {
   return (
@@ -24,6 +25,7 @@ export default function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/profile" element={<Profile />} />
+      <Route path="/admin" element={<Admin />} />
     </Routes>
   );
 }

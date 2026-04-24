@@ -1,6 +1,6 @@
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
-from app.services.directions_service import get_directions
 from app.services.geocoding_service import geocode_address
+from app.services.routing_service import plan_route
 from app.services.weather_service import get_weather_summary
 from app.utils.distance import haversine_km
 
@@ -29,5 +29,5 @@ def test_external_services_fallback_without_required_inputs():
         "longitude": None,
     }
 
-    assert get_directions("", "").get("distance_text") == "0 km"
+    assert plan_route(origin_text="", destination_text="") is None
     assert get_weather_summary(city="").get("condition") == "unknown"

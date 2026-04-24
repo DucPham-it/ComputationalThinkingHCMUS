@@ -1,19 +1,17 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 
 
 @dataclass
 class Review:
-    """User review entity.
-
-    Input source:
-    - internal database reviews table
-
-    Output use:
-    - returned in place detail page and review list endpoints
-    """
-
     id: int
     user_id: int
     place_id: int
     content: str
     rating: int
+    user_name: str | None = None
+    user_avatar_url: str | None = None
+    reviewed_at: str | None = None
+    image_urls: list[str] = field(default_factory=list)
+    is_virtual_user: bool = False

@@ -2,14 +2,11 @@ import { createContext, useEffect, useMemo, useState } from "react";
 
 /**
  * Authentication state container.
- *
- * TODO:
- * - persist JWT to localStorage or cookie
- * - expose login/logout helper methods
  */
 export const AuthContext = createContext(null);
 
 const USER_STORAGE_KEY = "auth_user";
+const TOKEN_STORAGE_KEY = "access_token";
 
 export function hasCompletedProfile(user) {
   return Boolean(user?.first_name && user?.last_name && user?.birth_date);
@@ -18,6 +15,11 @@ export function hasCompletedProfile(user) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     if (typeof window === "undefined") {
+      return null;
+    }
+
+    if (!window.localStorage.getItem(TOKEN_STORAGE_KEY)) {
+      window.localStorage.removeItem(USER_STORAGE_KEY);
       return null;
     }
 
@@ -47,10 +49,19 @@ export function AuthProvider({ children }) {
     window.localStorage.removeItem(USER_STORAGE_KEY);
   }, [user]);
 
+  function logout() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      window.localStorage.removeItem(USER_STORAGE_KEY);
+    }
+    setUser(null);
+  }
+
   const value = useMemo(
     () => ({
       user,
       setUser,
+      logout,
       isAuthenticated: Boolean(user),
       hasCompletedProfile: hasCompletedProfile(user)
     }),

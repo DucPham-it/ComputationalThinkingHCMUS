@@ -21,22 +21,3 @@ export function getCurrentBrowserLocation() {
     );
   });
 }
-
-export function reverseGeocodeCoordinates({ lat, lng }) {
-  return new Promise((resolve, reject) => {
-    if (!window.google?.maps?.Geocoder) {
-      reject(new Error("Google Maps geocoder is not available."));
-      return;
-    }
-
-    const geocoder = new window.google.maps.Geocoder();
-    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-      if (status === "OK" && results?.length) {
-        resolve(results[0].formatted_address);
-        return;
-      }
-
-      reject(new Error(status || "Reverse geocoding failed."));
-    });
-  });
-}

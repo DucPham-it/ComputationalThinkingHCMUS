@@ -22,6 +22,8 @@ if database_url.startswith("sqlite"):
 else:
     # Supabase already manages Postgres connections; avoid long-lived stale pools.
     engine_options["poolclass"] = NullPool
+    # Supabase PgBouncer transaction pooling is incompatible with psycopg prepared statements.
+    engine_options["connect_args"] = {"prepare_threshold": None}
 
 engine = create_engine(database_url, **engine_options)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)

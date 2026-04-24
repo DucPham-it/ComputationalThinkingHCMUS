@@ -20,10 +20,14 @@ class SearchHistoryRepository:
                 DELETE FROM user_search_history
                 WHERE id IN (
                     SELECT id
-                    FROM user_search_history
-                    WHERE user_id = :user_id
-                    ORDER BY searched_at DESC, id DESC
-                    LIMIT -1 OFFSET :max_items
+                    FROM (
+                        SELECT
+                            id,
+                            ROW_NUMBER() OVER (ORDER BY searched_at DESC, id DESC) AS item_rank
+                        FROM user_search_history
+                        WHERE user_id = :user_id
+                    ) AS ranked_searches
+                    WHERE item_rank > :max_items
                 )
                 """
             ),

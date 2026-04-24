@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Marker } from "@react-google-maps/api";
+import { CircleMarker, Tooltip } from "react-leaflet";
 
 import MapContainer from "../components/map/MapContainer";
 import MarkerList from "../components/map/MarkerList";
@@ -10,7 +10,6 @@ import { useAuth } from "../hooks/useAuth";
 import { useApp } from "../hooks/useApp";
 import {
   getCurrentBrowserLocation,
-  reverseGeocodeCoordinates,
 } from "../utils/geolocation";
 import { addFavorite } from "../services/favoriteService";
 import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/placeService";
@@ -23,26 +22,15 @@ const TRAVEL_MODES = [
   { value: "TRANSIT", label: "Transit" },
 ];
 
-function toRouteLocation(textValue, coords = null) {
-  const normalized = String(textValue || "").trim();
-  if (coords && typeof coords.lat === "number" && typeof coords.lng === "number") {
-    return coords;
-  }
-  return normalized || null;
-}
-
 function buildPointMarker(color) {
-  if (!window.google?.maps) {
-    return undefined;
-  }
-
   return {
-    path: window.google.maps.SymbolPath.CIRCLE,
-    scale: 9,
-    fillColor: color,
-    fillOpacity: 1,
-    strokeColor: "#ffffff",
-    strokeWeight: 2,
+    radius: 9,
+    pathOptions: {
+      color: "#ffffff",
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 1,
+    },
   };
 }
 
@@ -55,10 +43,8 @@ function buildTemporaryMapPlace(point, address = null) {
     latitude: point.lat,
     longitude: point.lng,
     photo_url: null,
-    google_rating: null,
-    google_review_count: 0,
-    web_rating: null,
-    web_review_count: 0,
+    rating: null,
+    review_count: 0,
     distance_km: null,
     _isTemporaryMapSelection: true,
     _isLocalOnly: true,
@@ -124,6 +110,19 @@ export default function RouteView() {
       });
     }
   }, [selectedPlace]);
+
+  useEffect(() => {
+    setRouteInfo(null);
+    setRouteError("");
+  }, [
+    currentLocation,
+    destinationInput,
+    destinationPoint,
+    originInput,
+    originMode,
+    originPoint,
+    travelMode,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -197,9 +196,6 @@ export default function RouteView() {
     ? `${destinationPoint.lat},${destinationPoint.lng}`
     : destinationInput.trim();
 
-  const routeOrigin = toRouteLocation(originInput, originMode === "gps" ? currentLocation : originPoint);
-  const routeDestination = toRouteLocation(destinationInput, destinationPoint);
-
   const startSummary =
     originMode === "gps" && currentLocation
       ? `${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}`
@@ -258,32 +254,17 @@ export default function RouteView() {
       );
       return;
     } catch (error) {
-      try {
-        const formattedAddress = await reverseGeocodeCoordinates(point);
-        const fallbackPlace = buildTemporaryMapPlace(point, formattedAddress);
-        setRecommendationPlaces((previousPlaces) => [
-          fallbackPlace,
-          ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
-        ]);
-        setSelectedPopupPlaceId(fallbackPlace.id);
-        setLocationNotice(
-          target === "origin"
-            ? "Map point previewed manually. Use Pick on map to confirm it as the start point."
-            : "Map point previewed manually. Use Pick on map to confirm it as the destination."
-        );
-      } catch {
-        const fallbackPlace = buildTemporaryMapPlace(point);
-        setRecommendationPlaces((previousPlaces) => [
-          fallbackPlace,
-          ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
-        ]);
-        setSelectedPopupPlaceId(fallbackPlace.id);
-        setLocationNotice(
-          target === "origin"
-            ? "Map point previewed manually. Use Pick on map to confirm it as the start point."
-            : "Map point previewed manually. Use Pick on map to confirm it as the destination."
-        );
-      }
+      const fallbackPlace = buildTemporaryMapPlace(point);
+      setRecommendationPlaces((previousPlaces) => [
+        fallbackPlace,
+        ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
+      ]);
+      setSelectedPopupPlaceId(fallbackPlace.id);
+      setLocationNotice(
+        target === "origin"
+          ? "Map point previewed manually. Use Pick on map to confirm it as the start point."
+          : "Map point previewed manually. Use Pick on map to confirm it as the destination."
+      );
     }
   }
 
@@ -393,6 +374,9 @@ export default function RouteView() {
         destination: data.destination,
         distance: data.distance_text,
         duration: data.duration_text,
+        distanceKm: data.distance_km,
+        durationSeconds: data.duration_seconds,
+        path: data.path || [],
         steps: (data.steps || []).map((step) => ({
           instructions: step.instruction,
           distance: step.distance_text,
@@ -642,23 +626,37 @@ export default function RouteView() {
           ) : null}
 
           {originMode === "gps" && currentLocation ? (
-            <Marker position={currentLocation} icon={gpsMarkerIcon} title="Current GPS" />
+            <CircleMarker
+              center={[currentLocation.lat, currentLocation.lng]}
+              radius={gpsMarkerIcon.radius}
+              pathOptions={gpsMarkerIcon.pathOptions}
+            >
+              <Tooltip>Current GPS</Tooltip>
+            </CircleMarker>
           ) : null}
 
           {originMode !== "gps" && originPoint ? (
-            <Marker position={originPoint} icon={originMarkerIcon} title="Start point" />
+            <CircleMarker
+              center={[originPoint.lat, originPoint.lng]}
+              radius={originMarkerIcon.radius}
+              pathOptions={originMarkerIcon.pathOptions}
+            >
+              <Tooltip>Start point</Tooltip>
+            </CircleMarker>
           ) : null}
 
           {destinationPoint ? (
-            <Marker position={destinationPoint} icon={destinationMarkerIcon} title="Destination" />
+            <CircleMarker
+              center={[destinationPoint.lat, destinationPoint.lng]}
+              radius={destinationMarkerIcon.radius}
+              pathOptions={destinationMarkerIcon.pathOptions}
+            >
+              <Tooltip>Destination</Tooltip>
+            </CircleMarker>
           ) : null}
 
-          {routeOrigin && routeDestination ? (
-            <RouteMap
-              origin={routeOrigin}
-              destination={routeDestination}
-              travelMode={travelMode}
-            />
+          {routeInfo?.path?.length ? (
+            <RouteMap path={routeInfo.path} />
           ) : null}
         </MapContainer>
       </Section>

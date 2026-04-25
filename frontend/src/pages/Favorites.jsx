@@ -6,7 +6,7 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 import Error from "../components/common/Error";
 import Empty from "../components/common/Empty";
 import { fetchFavorites, removeFavorite } from "../services/favoriteService";
-import { recordPlacePick } from "../services/placeService";
+import { recordPlacePick } from "../services/mapPickService";
 import { useApp } from "../hooks/useApp";
 
 export default function Favorites() {

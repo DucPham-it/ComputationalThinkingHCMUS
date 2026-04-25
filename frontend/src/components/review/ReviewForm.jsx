@@ -8,7 +8,8 @@ import { uploadReviewImages } from "../../services/uploadService";
  * Review creation form with optional image upload.
  *
  * Owner:
- * - TV7: Media Upload + Review Avatar.
+ * - Existing review creation/upload flow.
+ * - Not part of TV7's current Review Rating Filter assignment.
  *
  * File input:
  * - placeId: database place id from PlaceDetail.

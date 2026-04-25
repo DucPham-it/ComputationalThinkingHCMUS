@@ -8,7 +8,8 @@ import { uploadPlaceImages, uploadReviewImages } from "../../services/uploadServ
  * Place create/update/delete request form with optional image upload.
  *
  * Owner:
- * - TV7 owns image upload fields in this form.
+ * - Existing place request image upload flow.
+ * - Not part of TV7's current Review Rating Filter assignment.
  * - Place request approval flow remains shared/admin flow.
  *
  * File input:

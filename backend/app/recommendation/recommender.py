@@ -1,16 +1,21 @@
 """Top-level recommendation pipeline.
 
-Owners:
-- TV1: API request contract and search-history context.
-- TV4: filtering integration.
-- TV5: ranking/personalization integration.
+Owner:
+- TV5: Ranking + Personalization integration.
 
 File input:
 - Natural-language query, UI filters, optional coordinates, and authenticated
   user context.
+- Helper outputs from TV3 NLP, TV4 filtering, and TV5 ranking modules.
 
 File output:
 - Top 10 place dictionaries consumed by frontend RecommendationList.
+
+Conflict note:
+- TV3 edits app/recommendation/nlp_parser.py.
+- TV4 edits app/recommendation/filters.py.
+- TV5 edits app/recommendation/ranking.py and this orchestration file only when
+  helper contracts are stable.
 """
 
 from typing import Any
@@ -27,6 +32,22 @@ from app.services.place_search_service import search_places
 
 
 def _place_to_dict(place) -> dict[str, Any]:
+    """Convert a Place model into the recommendation dict contract.
+
+    Owner:
+    - TV5.
+
+    Input:
+    - place: Place-like object from repositories, expected to expose id, name,
+      address, rating, review_count, coordinates, pricing, open status, photo,
+      contact phone, and primary_type fields.
+
+    Output:
+    - dict containing the fields consumed by TV4 filtering and TV5 ranking:
+      id, name, address, latitude, longitude, rating, review_count,
+      distance_km, price_level, price_range, open_now, photo_url,
+      contact_phone, primary_type, and score.
+    """
     return {
         "id": place.id,
         "name": place.name,
@@ -48,6 +69,20 @@ def _place_to_dict(place) -> dict[str, Any]:
 
 
 def _dedupe_places(places: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove duplicate recommendation candidates while keeping first occurrence.
+
+    Owner:
+    - TV5.
+
+    Input:
+    - places: candidate place dicts from search, favorites, and pick history.
+      Items may have external_place_id, id, name, and address.
+
+    Output:
+    - list of place dicts in original order with duplicates removed.
+    - external_place_id is preferred as the dedupe key, then id, then
+      normalized name/address text.
+    """
     seen: set[str] = set()
     deduped: list[dict[str, Any]] = []
 
@@ -86,13 +121,12 @@ def recommend_places(
 ) -> list[dict[str, Any]]:
     """Return top place recommendations.
 
-    Owners:
-    - TV1 keeps request parameters compatible with the API route.
-    - TV4 owns filter-related arguments.
-    - TV5 owns ranking-related output.
+    Owner:
+    - TV5.
 
     Input:
-    - query: natural-language request. Can be empty for default suggestions.
+    - query: natural-language request from TV1 API route. Can be empty for
+      default suggestions.
     - latitude/longitude: browser GPS, profile address geocode, or map point.
     - db: SQLAlchemy session. Optional so tests can call without database.
     - user_id: authenticated user id. Optional for guest/default suggestions.
@@ -111,6 +145,14 @@ def recommend_places(
     - list[dict] of top places sorted by score, length <= limit.
     - Each place should contain id, name, address, latitude, longitude, rating,
       review_count, primary_type, photo_url, open_now, and score when available.
+
+    Contract boundaries:
+    - NLP parsing comes from TV3 helpers in nlp_parser.py.
+    - Candidate filtering comes from TV4 helpers in filters.py.
+    - Ranking/scoring comes from TV5 helpers in ranking.py.
+    - TV1 should not edit this function for API request changes; update the
+      route contract in recommendations.py and pass values through existing
+      parameters or agree a contract change first.
     """
     parsed = parse_search_text(query)
     resolved_type = entertainment_type or parsed.get("entertainment_type")
@@ -178,16 +220,15 @@ def build_recommendation_context(
     query: str,
     ui_filters: dict[str, Any],
 ) -> dict[str, Any]:
-    """TODO TV1/TV5: collect all context for one recommendation request.
+    """TODO TV5: collect all context for one recommendation request.
 
-    Owners:
-    - TV1 collects API/user/history context.
-    - TV5 consumes this context for personalization.
+    Owner:
+    - TV5.
 
     Input:
     - user_id: authenticated user id
     - db: SQLAlchemy session
-    - query: raw natural-language request
+    - query: raw natural-language request already accepted by TV1 API route
     - ui_filters: filter controls submitted by frontend:
       entertainment_type, budget_level, companion_type, start_time,
       max_distance_km, require_open_now, min_rating, latitude, longitude

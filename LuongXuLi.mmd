@@ -1,42 +1,92 @@
-
 flowchart TD
-    A[User nhập yêu cầu] --> B[Frontend gửi request]
-    B --> C[Backend Recommendation API]
+    %% Luong xu li tong quan sau khi tach module tranh conflict.
+    %% Input/Output chinh:
+    %% - Recommendation input: query, filter, toa do nguoi dung.
+    %% - Recommendation output: { items: PlaceSummary[] } toi da 10 dia diem.
+    %% - Map pick input: placeId hoac toa do click tren ban do.
+    %% - Map pick output: luu tuong tac pick hoac tra ve place-like object.
+    %% - Review TV7 input: danh sach review va tag so sao.
+    %% - Review TV7 output: danh sach review da loc, hien 3 dau tien va moi lan mo rong them 10.
 
-    C --> D[NLP Parser]
-    D --> E[Chuẩn hóa input]
+    subgraph FE_REC["Frontend - Tim kiem goi y"]
+        A["Nguoi dung nhap query / filter / vi tri"] --> B["Home.jsx + SearchBar.jsx + FilterPanel.jsx"]
+        B --> C["recommendationService.fetchRecommendations(params)"]
+    end
 
-    E --> F[Lấy vị trí người dùng]
-    E --> G[Geocoding địa chỉ nếu cần]
-    E --> H[Xác định loại địa điểm, ngân sách, thời gian, đối tượng]
+    subgraph BE_REC["Backend - Recommendation"]
+        C --> D["api/routes/recommendations.py:get_recommendations"]
+        D --> E["recommendations.py:_build_history_query"]
+        E --> F["search_history_repo.py"]
+        F --> DB["Database"]
 
-    F --> I[Google Places API]
-    G --> I
-    H --> I
+        D --> G{"Co dia chi / toa do?"}
+        G -->|Co dia chi| H["geocoding_service.geocode_address"]
+        G -->|Co toa do| I["Dung truc tiep latitude/longitude"]
+        H --> J["Local DB truoc, Nominatim fallback"]
+        J --> K["recommender.py:recommend_places"]
+        I --> K
+        D --> K
 
-    I --> J[Lấy danh sách địa điểm thô]
+        K --> L["nlp_parser.py:parse_search_text"]
+        K --> M["place_search_service.py:search_places"]
+        M --> N["place_repo.py:search_local_places"]
+        N --> DB
 
-    J --> K[Lấy Directions API]
-    J --> L[Lấy Weather API]
-    J --> M[Lấy dữ liệu nội bộ từ DB]
+        K --> O["filters.py:apply_filters"]
+        O --> P["Loc khoang cach / ngan sach / gio mo cua / loai dia diem / rating"]
+        P --> Q["ranking.py:rank_places"]
+        Q --> R["ranking.py:compute_score"]
+        R --> S["Top 10 PlaceSummary"]
+    end
 
-    K --> N[Ghép dữ liệu]
-    L --> N
-    M --> N
+    S --> T["Tra JSON ve frontend"]
+    T --> U["Home.jsx hien RecommendationList"]
 
-    N --> O[Filter]
-    O --> P[Filter theo khoảng cách]
-    O --> Q[Filter theo ngân sách]
-    O --> R[Filter theo mở cửa]
-    O --> S[Filter theo loại địa điểm]
-    O --> T[Filter theo thời tiết]
+    subgraph FE_PICK["Frontend - Map pick va route"]
+        V["Nguoi dung chon marker / card / route item"] --> W["mapPickService.recordPlacePick(placeId)"]
+        X["Nguoi dung click toa do tren ban do"] --> Y["mapPickService.resolvePlaceFromCoordinates(latitude, longitude)"]
+    end
 
-    P --> U[Ranking]
-    Q --> U
-    R --> U
-    S --> U
-    T --> U
+    subgraph BE_PICK["Backend - Pick / Resolve point"]
+        W --> Z["api/routes/recommendation_picks.py:record_place_pick"]
+        Z --> AA["pick_repo.py:add_pick"]
+        AA --> DB
 
-    U --> V[Top N địa điểm]
-    V --> W[Trả JSON về frontend]
-    W --> X[Hiển thị recommendation list]
+        Y --> AB["api/routes/places.py:resolve_point_to_place"]
+        AB --> AC["place_search_service.py:resolve_place_from_coordinates"]
+        AC --> AD["Tim dia diem gan nhat trong DB"]
+        AC --> AE["reverse_geocode_coordinates fallback"]
+        AD --> AF["PlaceResponse"]
+        AE --> AF
+    end
+
+    AF --> AG["MapView / RouteView cap nhat diem da chon"]
+
+    subgraph FE_REVIEW["Frontend - Review TV7"]
+        AH["ReviewPage.jsx / PlaceDetail.jsx can hien binh luan"] --> AI["reviewService.fetchReviews(placeId)"]
+        AI --> AJ["ReviewList.jsx"]
+        AJ --> AK["reviewListLogic.js:filterReviewsByRating"]
+        AK --> AL["reviewListLogic.js:getVisibleReviews"]
+        AL --> AM["Hien 3 binh luan dau tien"]
+        AM --> AN["Nhan tag mo rong"]
+        AN --> AO["getNextVisibleReviewCount: moi lan them 10"]
+        AO --> AP{"Con binh luan?"}
+        AP -->|Con| AN
+        AP -->|Het| AQ["Dung mo rong"]
+    end
+
+    subgraph BE_REVIEW["Backend - Review"]
+        AR["Nguoi dung gui review"] --> AS["reviewService.createReview(payload)"]
+        AS --> AT["api/routes/reviews.py:create_review"]
+        AT --> AU["review_repo.py"]
+        AT --> AV["place_repo.py cap nhat rating/review_count"]
+        AU --> DB
+        AV --> DB
+    end
+
+    subgraph BE_ROUTE["Backend - Route"]
+        AW["RouteView.jsx yeu cau duong di"] --> AX["routeService.getRoute(params)"]
+        AX --> AY["api/routes/routes.py:plan_route"]
+        AY --> AZ["routing_service.py:plan_route"]
+        AZ --> BA["OSRM route, fallback haversine"]
+    end

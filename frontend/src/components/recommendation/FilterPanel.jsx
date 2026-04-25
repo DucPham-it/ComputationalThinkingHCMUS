@@ -14,7 +14,7 @@
  * - visual controls for filters sent to GET /recommendations:
  *   entertainment_type, budget_level, companion_type, start_time,
  *   max_distance_km, require_open_now, min_rating.
- * - buildRecommendationFilterPayload output used by placeService.fetchRecommendations.
+ * - buildRecommendationFilterPayload output used by recommendationService.fetchRecommendations.
  *
  * TODO TV2:
  * - lift state to Home page

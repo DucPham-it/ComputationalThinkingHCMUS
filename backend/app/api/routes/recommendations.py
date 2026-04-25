@@ -1,29 +1,25 @@
 """Recommendation API routes.
 
-Owners:
+Owner:
 - TV1: GET /recommendations request/response and search-history side effect.
-- TV6: POST /recommendations/picks/{place_id} for map/route pick history.
 
 File input:
 - Query params from frontend recommendation search/filter UI.
 - Authenticated user from dependency.
-- Place id from map/route pick action.
 
 File output:
 - Top 10 recommendation response for frontend.
-- Persisted search history and place pick history for personalization.
+- Persisted search history for personalization.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_completed_profile
+from app.api.deps import require_completed_profile
 from app.db.session import get_db
-from app.repositories.pick_repo import PickRepository
+from app.recommendation.recommender import recommend_places
 from app.repositories.search_history_repo import SearchHistoryRepository
 from app.repositories.user_repo import UserRepository
-from app.repositories.place_repo import PlaceRepository
-from app.recommendation.recommender import recommend_places
 from app.services.geocoding_service import geocode_address
 
 router = APIRouter()
@@ -148,33 +144,3 @@ def get_recommendations(
         limit=10,
     )
     return {"items": items}
-
-
-@router.post("/picks/{place_id}", status_code=status.HTTP_204_NO_CONTENT)
-def record_place_pick(
-    place_id: int,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> Response:
-    """Store a place pick so future suggestions can learn from it.
-
-    Owner:
-    - TV6.
-
-    Input:
-    - place_id: database place id selected from map marker or route destination.
-    - current_user: authenticated user from access token.
-    - db: SQLAlchemy session.
-
-    Output:
-    - HTTP 204 when pick is recorded.
-    - HTTP 404 when place_id does not exist.
-
-    Side effect:
-    - upserts user_place_picks and refreshes picked_at timestamp.
-    """
-    place = PlaceRepository(db).get_by_id(place_id)
-    if place is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Place not found.")
-    PickRepository(db).add_pick(current_user["id"], place_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)

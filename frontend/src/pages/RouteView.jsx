@@ -12,7 +12,7 @@ import {
   getCurrentBrowserLocation,
 } from "../utils/geolocation";
 import { addFavorite } from "../services/favoriteService";
-import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/placeService";
+import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/mapPickService";
 import { getRoute } from "../services/routeService";
 
 const TRAVEL_MODES = [

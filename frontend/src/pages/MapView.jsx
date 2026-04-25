@@ -31,7 +31,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../hooks/useApp";
 import { getCurrentBrowserLocation } from "../utils/geolocation";
 import { addFavorite } from "../services/favoriteService";
-import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/placeService";
+import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/mapPickService";
 
 function buildTemporaryMapPlace(point, address = null) {
     /**

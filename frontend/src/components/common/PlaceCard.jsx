@@ -13,7 +13,7 @@ import {
 import { formatRating } from "../../utils/formatter";
 import { useApp } from "../../hooks/useApp";
 import { addFavorite } from "../../services/favoriteService";
-import { recordPlacePick } from "../../services/placeService";
+import { recordPlacePick } from "../../services/mapPickService";
 
 function getNumericPlaceId(place) {
     const numericId = Number(place?.id);

@@ -1,14 +1,23 @@
 # PHÂN CÔNG CÔNG VIỆC PROJECT
 
-Smart Travel Recommendation - bản phân công cho 7 thành viên thực thi. Nhóm trưởng không nằm trong 7 người này.
-
 ## Vai Trò Nhóm Trưởng
 
-Bạn là người connect, quản lý và test:
+Nhóm trưởng phụ trách kết nối, quản lý và kiểm thử:
 - Chốt API contract giữa các tính năng.
 - Review tiến độ, gồm branch, merge code.
 - Chạy test tích hợp và test nghiệm thu cuối.
 - Không nhận một module thực thi riêng để tránh vừa làm vừa kiểm.
+
+## Công Việc Nhóm Trưởng Đã Thực Hiện Trong Phân Công
+
+- Rà soát các file/hàm có nhiều thành viên cùng chạm, gồm `recommend_places`, `recommendations.py`, `placeService.js`, `ReviewList.jsx`.
+- Chỉnh lại phân công để TV1, TV2, TV5, TV6, TV7 có phạm vi file/hàm rõ hơn.
+- Tách endpoint record pick của TV6 sang `backend/app/api/routes/recommendation_picks.py`, giữ nguyên URL API hiện có.
+- Tách service frontend thành `recommendationService.js` cho TV2, `mapPickService.js` cho TV6, và `placeService.js` cho luồng chi tiết địa điểm.
+- Tạo helper riêng `frontend/src/components/review/reviewListLogic.js` cho TV7.
+- Xóa `frontend/src/features.md` vì tài liệu phân công không nên nằm trong source frontend.
+- Cập nhật `TEAM_ASSIGNMENT.md` làm nguồn phân công chính, gồm phạm vi, input, output, helper và kết quả rà soát.
+- Chạy kiểm tra sau khi tách: frontend build, backend tests liên quan recommendation/review, và kiểm tra import FastAPI app.
 
 ## Nguyên Tắc Chia Việc
 
@@ -16,29 +25,31 @@ Bạn là người connect, quản lý và test:
 - Một tính năng có thể có 1 hoặc 2 người phụ trách nếu cần FE + BE/AI.
 - Frontend là phần nhẹ nên được ghép vào tính năng, không tách thành nhóm riêng.
 - Mỗi hàm mới phải có docstring/comment ghi rõ Input, Output, TODO.
-- Mỗi file trong scope phải có comment đầu file ghi Owner, File input, File output.
+- Mỗi file trong phạm vi phụ trách phải có comment đầu file ghi Owner, File input, File output.
 - Mỗi hàm public/helper quan trọng phải có comment/docstring ghi Owner, Input, Output.
 - Mỗi API phải ghi rõ request input, response output, lỗi có thể trả về.
 - Recommendation luôn trả tối đa top 10 địa điểm.
 - Search history mỗi user lưu tối đa 80 dòng gần nhất.
-- Thành viên chỉ sửa file trong scope của mình. Nếu cần đổi contract, báo nhóm trưởng chốt trước.
+- Thành viên chỉ sửa file trong phạm vi phụ trách. Nếu cần đổi contract, cần báo nhóm trưởng chốt trước.
+- Không chia việc theo kiểu nhiều người cùng sửa một hàm orchestration lớn.
+- Nếu một luồng cần nhiều người cùng làm, mỗi người tạo helper riêng trong file phụ trách, sau đó nhóm trưởng hoặc người phụ trách điều phối mới nối helper lại.
 
-## Tong Quan Tinh Nang Va Owner
+## Tổng Quan Tính Năng Và Người Phụ Trách
 
-| Tính năng | Owner | Mục tiêu |
+| Tính năng | Phụ trách | Mục tiêu |
 | --- | --- | --- |
 | F1. Recommendation Request + Search History | TV1 + TV2 | Nhận ngôn ngữ tự nhiên/filter, gọi API, lưu lịch sử 80 dòng |
 | F2. NLP Field Extraction | TV3 | Tách câu người dùng thành các trường filter có cấu trúc |
 | F3. Candidate Filtering | TV4 | Lọc địa điểm theo query, filter, khoảng cách, rating, open now |
 | F4. Ranking + Personalization | TV5 | Xếp hạng top 10 theo random baseline, pick history, search history |
 | F5. Map Pick To Route | TV6 | Chọn địa điểm trên map thành điểm muốn đến ở route |
-| F6. Media Upload + Review Avatar | TV7 | Upload avatar/review/place image, hiện avatar fallback |
+| F6. Review Rating Filter + Incremental Comments | TV7 | Lọc bình luận theo số sao, ban đầu hiện 3 bình luận, nhấn mở rộng hiện thêm 10 |
 
 ---
 
 ## F1. Recommendation Request + Search History
 
-Owner:
+Phụ trách:
 - TV1: Backend API, request contract, search history.
 - TV2: Frontend search/filter/result wiring.
 
@@ -48,17 +59,18 @@ Mục tiêu:
 - Backend lưu lịch sử tìm kiếm của user, tối đa 80 dòng mỗi user.
 - API trả về top 10 địa điểm phù hợp.
 
-Scope TV1:
+Phạm vi TV1:
 - `backend/app/api/routes/recommendations.py`
 - `backend/app/repositories/search_history_repo.py`
 - `backend/app/core/config.py`
 - `backend/app/schemas/place_schema.py`
 
-Scope TV2:
+Phạm vi TV2:
 - `frontend/src/pages/Home.jsx`
 - `frontend/src/components/recommendation/FilterPanel.jsx`
 - `frontend/src/components/recommendation/RecommendationList.jsx`
-- `frontend/src/services/placeService.js`
+- `frontend/src/services/recommendationService.js`
+- Không sửa `frontend/src/services/mapPickService.js` khi làm search/filter.
 
 Input chi tiết:
 - Từ frontend:
@@ -98,7 +110,7 @@ Output chi tiết:
 - Frontend output:
   - Render danh sách top 10.
   - Hiển thị trạng thái loading, empty, error.
-  - Khi click một địa điểm, có thể mở detail/map/route tùy flow hiện có.
+  - Khi click một địa điểm, có thể mở detail/map/route tùy luồng hiện có.
 
 Việc nhỏ TV1:
 - Hoàn thiện `_build_history_query` để filter-only search vẫn tạo history để đọc.
@@ -120,20 +132,20 @@ Bàn giao cho nhóm trưởng:
 
 ## F2. NLP Field Extraction
 
-Owner:
+Phụ trách:
 - TV3.
 
 Mục tiêu:
 - Phân tích câu tự nhiên thành các trường filter có cấu trúc để F3/F4 sử dụng.
 - Hỗ trợ tiếng Việt có dấu, không dấu và một số từ khóa tiếng Anh phổ biến.
 
-Scope:
+Phạm vi:
 - `backend/app/recommendation/nlp_parser.py`
 - Test liên quan trong `backend/app/tests/`
 
 Input chi tiết:
 - `query`: string bất kỳ do user nhập.
-  - Ví dụ: `tôi muốn ăn rẻ gần đây tối nay`
+  - Ví dụ: `cần quán ăn rẻ gần đây tối nay`
   - Ví dụ: `quán cafe yên tĩnh cho cặp đôi gần đây`
   - Ví dụ: `gợi ý nơi đi với gia đình, trên 4 sao, đang mở cửa`
 - Từ điển/keyword nội bộ:
@@ -175,17 +187,17 @@ Bàn giao cho nhóm trưởng:
 
 ## F3. Candidate Filtering
 
-Owner:
+Phụ trách:
 - TV4.
 
 Mục tiêu:
 - Nhận candidate places và filter đã hợp nhất, lọc ra danh sách địa điểm hợp lệ trước khi xếp hạng.
 - Filter phải dùng được cho cả input từ NLP và input từ UI.
 
-Scope:
+Phạm vi:
 - `backend/app/recommendation/filters.py`
-- `backend/app/recommendation/recommender.py`
 - Các repository đọc place nếu cần bổ sung field
+- Không sửa trực tiếp `backend/app/recommendation/recommender.py` khi chưa chốt contract; TV4 chỉ expose helper/filter plan để người phụ trách điều phối nối sau.
 
 Input chi tiết:
 - `places`: array place dict/object từ database/search layer.
@@ -230,7 +242,7 @@ Bàn giao cho nhóm trưởng:
 
 ## F4. Ranking + Personalization
 
-Owner:
+Phụ trách:
 - TV5.
 
 Mục tiêu:
@@ -238,10 +250,10 @@ Mục tiêu:
 - Nếu user chưa có dữ liệu, dùng random baseline có seed để kết quả không nhảy lung tung.
 - Nếu có dữ liệu, ưu tiên theo địa điểm đã pick trước, sau đó theo search history và favorite/saved places nếu có.
 
-Scope:
+Phạm vi:
 - `backend/app/recommendation/ranking.py`
-- `backend/app/recommendation/recommender.py`
 - Repository đọc picks/favorites/search history nếu cần
+- `backend/app/recommendation/recommender.py` chỉ sửa phần nối ranking/top 10 sau khi output của F3 đã ổn định.
 
 Input chi tiết:
 - `filtered_places`: array place từ F3.
@@ -267,7 +279,7 @@ Output chi tiết:
     - `favorite`
     - `distance`
     - `rating`
-  - `explanation`: string ngắn, ví dụ `Gần các nơi bạn từng chọn và phù hợp cafe yên tĩnh`.
+  - `explanation`: string ngắn, ví dụ `Gần các địa điểm đã từng chọn và phù hợp cafe yên tĩnh`.
 - Thứ tự fallback:
   - Không có user context: random baseline + rating/distance nếu có.
   - Có pick history: cộng điểm cho địa điểm cùng type/khu vực/gần pick gần đây.
@@ -289,7 +301,7 @@ Bàn giao cho nhóm trưởng:
 
 ## F5. Map Pick To Route
 
-Owner:
+Phụ trách:
 - TV6.
 
 Mục tiêu:
@@ -297,12 +309,14 @@ Mục tiêu:
 - Địa điểm/tọa độ đó trở thành destination ở trang route.
 - Nếu pick place có `place_id`, backend ghi nhận pick để F4 dùng cho personalization.
 
-Scope:
+Phạm vi:
 - `frontend/src/pages/MapView.jsx`
 - `frontend/src/pages/RouteView.jsx`
 - `frontend/src/context/AppContext.jsx`
+- `frontend/src/services/mapPickService.js`
 - `backend/app/repositories/pick_repo.py`
-- `backend/app/api/routes/recommendations.py`
+- `backend/app/api/routes/recommendation_picks.py`
+- Không sửa `backend/app/api/routes/recommendations.py` khi làm record pick.
 
 Input chi tiết:
 - Từ map marker:
@@ -351,68 +365,136 @@ Bàn giao cho nhóm trưởng:
 
 ---
 
-## F6. Media Upload + Review Avatar
+## F6. Review Rating Filter + Incremental Comments
 
-Owner:
+Phụ trách:
 - TV7.
 
 Mục tiêu:
-- Hoàn thiện upload ảnh lên Supabase Storage cho avatar user, ảnh địa điểm, ảnh review.
-- Review/comment hiển avatar người dùng, nếu thiếu thì dùng `avatars/default/default-avatar.jpg`.
+- Trọng tâm mới của TV7 là hệ thống lọc bình luận theo số sao.
+- Ban đầu danh sách review chỉ hiển thị 3 bình luận phù hợp với filter hiện tại.
+- Khi user nhấn nút/tag mở rộng, hiển thị thêm 10 bình luận nữa.
+- Tiếp tục nhấn mở rộng thêm 10 cho đến khi hết bình luận.
 
-Scope:
-- `backend/app/api/routes/uploads.py`
-- `backend/app/services/upload_storage.py`
-- `backend/app/schemas/upload_schema.py`
-- `frontend/src/services/uploadService.js`
-- `frontend/src/pages/Profile.jsx`
-- `frontend/src/components/review/ReviewForm.jsx`
+Phạm vi:
 - `frontend/src/components/review/ReviewList.jsx`
-- `frontend/src/components/map/PlaceRequestForm.jsx`
+- `frontend/src/components/review/reviewListLogic.js`
+- `frontend/src/services/reviewService.js` cho khung query params nếu sau này cần backend filter/pagination
+- Test liên quan nếu nhóm thêm test frontend
 
 Input chi tiết:
-- Avatar upload:
-  - File field: `file`.
-  - Loại file cho phép: `image/jpeg`, `image/png`, `image/webp`.
-  - User đã đăng nhập để gán avatar vào profile.
-- Review image upload:
-  - File field: `files` hoặc nhiều file tùy API hiện có.
-  - `place_id`: string/number nếu cần gán ảnh với review/place.
-  - Review form fields: `rating`, `content`, `image_urls`.
-- Place image upload:
-  - File địa điểm từ form request tạo/cập nhật địa điểm.
-- Storage config:
-  - Bucket avatar: `avatars`.
-  - Bucket place: `places`.
-  - Bucket review: `reviews`.
-  - Default avatar path: `avatars/default/default-avatar.jpg`.
+- `reviews`: array từ backend, mỗi item có thể gồm:
+  - `id`
+  - `place_id`
+  - `user_name`
+  - `user_avatar_url`
+  - `reviewed_at`
+  - `rating`: number/string, dự kiến 1..5
+  - `content`
+  - `image_urls`
+- `ratingFilter`: `"all"` hoặc số sao 1, 2, 3, 4, 5.
+- `visibleCount`: số review đang được phép render, mặc định `3`.
+- Hằng số hiển thị:
+  - `INITIAL_VISIBLE_REVIEW_COUNT = 3`
+  - `REVIEW_LOAD_MORE_COUNT = 10`
 
 Output chi tiết:
-- Backend upload response:
-  - `url`: public URL ảnh trên Supabase Storage.
-  - `path`: storage path nội bộ.
-  - `bucket`: bucket đã upload.
-  - `content_type`: MIME type.
-  - `size`: kích thước bytes.
-- Frontend:
-  - Profile avatar cập nhật URL mới sau upload.
-  - Review form gửi `image_urls` trong payload tạo review.
-  - Review list hiển avatar user bên trái comment/review.
-  - Nếu `user.avatar_url` rỗng hoặc ảnh lỗi, fallback sang public URL của `avatars/default/default-avatar.jpg`.
-- Lỗi cần xử lý:
-  - File quá dung lượng.
-  - Sai định dạng.
-  - Supabase Storage lỗi/quyền bucket sai.
+- UI có tag/button filter:
+  - `All`
+  - `5 sao`
+  - `4 sao`
+  - `3 sao`
+  - `2 sao`
+  - `1 sao`
+- Mỗi tag hiển thị số lượng review đang có ở rating đó.
+- Danh sách render chỉ gồm review khớp `ratingFilter`.
+- Lần đầu render hoặc sau khi đổi filter:
+  - `visibleReviews = filteredReviews.slice(0, 3)`
+- Khi nhấn mở rộng:
+  - `visibleCount = min(visibleCount + 10, filteredReviews.length)`
+- Khi hết review để mở rộng:
+  - Ẩn nút mở rộng.
+- Nếu filter không có review:
+  - Hiển thị empty state ngắn, không làm mất filter tags.
+- Không có side effect backend ở phiên bản đầu; lọc và phân trang hiển thị làm ở frontend.
+
+File/hàm khung:
+- `frontend/src/components/review/reviewListLogic.js`
+  - File input:
+    - `reviews`: array review từ backend.
+    - `ratingFilter`: `"all"` hoặc số sao 1..5.
+    - `visibleCount`: số review đang được phép render.
+  - File output:
+    - rating đã normalize.
+    - count từng rating.
+    - review đã lọc.
+    - review slice để render.
+    - visible count tiếp theo khi mở rộng.
+  - Side effect:
+    - Không có, file này chỉ chứa pure helper.
+- `frontend/src/components/review/ReviewList.jsx`
+  - File input:
+    - `reviews`: array review đã load.
+    - `emptyMessage`: text optional khi không có review.
+  - File output:
+    - rating filter tags.
+    - tối đa 3 review lúc đầu.
+    - nút mở rộng thêm tối đa 10 review mỗi lần.
+    - empty state khi filter không có review.
+- `frontend/src/services/reviewService.js`
+  - File input:
+    - `placeId`.
+    - `options.ratingFilter`, `options.limit`, `options.offset` nếu sau này backend hỗ trợ.
+  - File output:
+    - params object cho `GET /reviews`.
+    - review list payload từ backend.
+
+Hàm/helper cần có input/output rõ:
+- `normalizeReviewRating(value)`
+  - Input: rating từ API/UI, kiểu number hoặc string.
+  - Output: số nguyên 1..5, hoặc `null` nếu rating không hợp lệ.
+- `countReviewsByRating(reviews)`
+  - Input: array review.
+  - Output: object `{ all, 1, 2, 3, 4, 5 }` chứa số lượng review.
+- `buildReviewRatingFilterOptions(reviews)`
+  - Input: array review.
+  - Output: array option `{ value, label, count }` để render tag filter.
+- `filterReviewsByRating(reviews, ratingFilter)`
+  - Input: array review và `"all"` hoặc số sao 1..5.
+  - Output: array review đã lọc.
+- `getVisibleReviews(filteredReviews, visibleCount)`
+  - Input: array review đã lọc và số lượng được phép hiển thị.
+  - Output: array review sẽ render.
+- `getNextVisibleReviewCount(currentVisibleCount, totalReviewCount)`
+  - Input: số lượng đang hiển thị và tổng số review sau lọc.
+  - Output: số lượng mới sau khi nhấn mở rộng, tăng thêm tối đa 10.
+- `buildReviewListParams(placeId, options)`
+  - Input: place id, rating filter, limit, offset.
+  - Output: query params object cho API review; dùng sau nếu chuyển filter/pagination xuống backend.
+- `handleRatingFilterChange(nextFilter)`
+  - Input: filter mới do user chọn.
+  - Output: cập nhật `ratingFilter`, reset `visibleCount = 3`.
+- `handleLoadMore()`
+  - Input: `visibleCount` hiện tại và tổng số `filteredReviews`.
+  - Output: tăng `visibleCount` thêm 10 nhưng không vượt quá tổng số review.
 
 Việc nhỏ:
-- Hoàn thiện preview/remove ảnh review trước khi submit.
-- Hiển lỗi upload thân thiện trên UI.
-- Đảm bảo default avatar dùng public URL từ Supabase.
+- Tạo rating filter tags trong `ReviewList`.
+- Tính count cho từng số sao.
+- Lọc chính xác review theo sao đã chọn.
+- Giới hạn ban đầu 3 review.
+- Nút/tag mở rộng thêm 10 review mỗi lần.
+- Reset về 3 review khi đổi filter.
 - Kiểm tra mobile layout review/comment không vỡ.
 
 Bàn giao cho nhóm trưởng:
-- Demo upload avatar, upload review images, fallback avatar.
-- Danh sách env/bucket cần cấu hình.
+- Demo 4 case:
+  - Tất cả review, ban đầu chỉ hiện 3.
+  - Chọn 5 sao, chỉ hiện review 5 sao.
+  - Nhấn mở rộng nhiều lần, mỗi lần thêm tối đa 10.
+  - Chọn rating không có review, thấy empty state.
+- Danh sách hàm/helper đã thêm và input/output của từng hàm.
+- Ghi rõ đây là phần lọc/hiển thị ở frontend; nếu dữ liệu review rất lớn thì phiên bản sau mới chuyển filter/pagination xuống backend.
 
 ---
 
@@ -458,4 +540,4 @@ TODO TV5:
 Nhóm trưởng sẽ:
 - Kiểm tra contract giữa F1-F6.
 - Chạy backend tests và frontend build.
-- Test flow cuối: nhập ngôn ngữ/filter -> top 10 -> pick trên map -> route -> history/personalization.
+- Test luồng cuối: nhập ngôn ngữ/filter -> top 10 -> pick trên map -> route -> history/personalization.

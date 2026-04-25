@@ -9,7 +9,7 @@ import ReviewList from "../components/review/ReviewList";
 import ReviewForm from "../components/review/ReviewForm";
 import { addFavorite } from "../services/favoriteService";
 import { fetchPlaceDetail } from "../services/placeService";
-import { recordPlacePick } from "../services/placeService";
+import { recordPlacePick } from "../services/mapPickService";
 import { fetchReviews } from "../services/reviewService";
 import { useApp } from "../hooks/useApp";
 import { formatRating } from "../utils/formatter";

@@ -10,7 +10,8 @@ import { uploadAvatar } from "../services/uploadService";
  * Profile completion/update page.
  *
  * Owner:
- * - TV7 owns avatar upload behavior.
+ * - Legacy/completed avatar upload behavior.
+ * - Not part of TV7's current Review Rating Filter assignment.
  * - Existing auth/profile fields remain shared application flow.
  *
  * File input:

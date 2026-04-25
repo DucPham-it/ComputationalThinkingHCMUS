@@ -1,18 +1,29 @@
-import { MessageSquareText, Star } from "lucide-react";
+import { ChevronDown, MessageSquareText, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  buildReviewRatingFilterOptions,
+  filterReviewsByRating,
+  getNextVisibleReviewCount,
+  getVisibleReviews,
+  INITIAL_VISIBLE_REVIEW_COUNT,
+  REVIEW_LOAD_MORE_COUNT,
+} from "./reviewListLogic";
 
 /**
  * Review/comment list with user avatar display.
  *
  * Owner:
- * - TV7: Media Upload + Review Avatar.
+ * - TV7: Review Rating Filter + Incremental Comments.
  *
  * File input:
  * - reviews: array of review payloads from backend.
  * - emptyMessage: optional text when there are no reviews.
  *
  * File output:
+ * - Rating filter tags and incremental review display.
  * - Review cards with avatar, name, date/place id, rating stars, content, images.
- * - Fallback avatar from Supabase Storage when user_avatar_url is missing/broken.
+ * - Existing avatar fallback behavior remains unchanged.
  */
 
 const SUPABASE_PUBLIC_URL =
@@ -73,8 +84,54 @@ export default function ReviewList({
    *   user_avatar_url, reviewed_at, rating, content, image_urls.
    *
    * Output:
-   * - JSX review list or empty-state card.
+   * - JSX rating filter, incremental review list, or empty-state card.
    */
+  const [ratingFilter, setRatingFilter] = useState("all");
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_REVIEW_COUNT);
+  const ratingFilterOptions = useMemo(() => buildReviewRatingFilterOptions(reviews), [reviews]);
+  const filteredReviews = useMemo(
+    () => filterReviewsByRating(reviews, ratingFilter),
+    [reviews, ratingFilter],
+  );
+  const visibleReviews = getVisibleReviews(filteredReviews, visibleCount);
+  const remainingCount = Math.max(0, filteredReviews.length - visibleReviews.length);
+
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_REVIEW_COUNT);
+  }, [ratingFilter, reviews.length]);
+
+  function handleRatingFilterChange(nextFilter) {
+    /**
+     * Owner:
+     * - TV7.
+     *
+     * Input:
+     * - nextFilter: "all" or selected star value from rating filter button.
+     *
+     * Output:
+     * - updates ratingFilter state.
+     * - resets visibleCount to the first 3 matching reviews.
+     */
+    setRatingFilter(nextFilter);
+    setVisibleCount(INITIAL_VISIBLE_REVIEW_COUNT);
+  }
+
+  function handleLoadMore() {
+    /**
+     * Owner:
+     * - TV7.
+     *
+     * Input:
+     * - current visibleCount and filteredReviews length from component state.
+     *
+     * Output:
+     * - increases visibleCount by 10, capped at the filtered review total.
+     */
+    setVisibleCount((currentCount) => (
+      getNextVisibleReviewCount(currentCount, filteredReviews.length)
+    ));
+  }
+
   if (!reviews.length) {
     return (
       <div
@@ -112,7 +169,49 @@ export default function ReviewList({
 
   return (
     <div style={{ display: "grid", gap: "16px" }}>
-      {reviews.map((review) => (
+      <div
+        role="group"
+        aria-label="Filter reviews by star rating"
+        style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}
+      >
+        {ratingFilterOptions.map((option) => {
+          const isSelected = ratingFilter === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={isSelected ? "btn-primary" : "btn-outline"}
+              aria-pressed={isSelected}
+              onClick={() => handleRatingFilterChange(option.value)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 12px",
+                borderRadius: "12px",
+                fontWeight: 700,
+                minHeight: "38px",
+              }}
+            >
+              {option.value === "all" ? (
+                <MessageSquareText size={15} />
+              ) : (
+                <Star size={15} fill="currentColor" />
+              )}
+              <span>{option.label}</span>
+              <span style={{ opacity: 0.78 }}>({option.count})</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {!filteredReviews.length ? (
+        <div className="card" style={{ padding: "20px", textAlign: "center" }}>
+          <p style={{ margin: 0 }}>No reviews match this rating yet.</p>
+        </div>
+      ) : null}
+
+      {visibleReviews.map((review) => (
         <article
           key={review.id}
           className="card"
@@ -180,6 +279,26 @@ export default function ReviewList({
           ) : null}
         </article>
       ))}
+
+      {remainingCount > 0 ? (
+        <button
+          type="button"
+          className="btn-outline"
+          onClick={handleLoadMore}
+          style={{
+            justifySelf: "center",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "10px 16px",
+            borderRadius: "12px",
+            fontWeight: 800,
+          }}
+        >
+          <ChevronDown size={18} />
+          Show {Math.min(REVIEW_LOAD_MORE_COUNT, remainingCount)} more
+        </button>
+      ) : null}
     </div>
   );
 }

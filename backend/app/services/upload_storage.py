@@ -1,7 +1,8 @@
 """Supabase Storage image upload helpers.
 
 Owner:
-- TV7: Media Upload + Review Avatar.
+- Legacy/completed media upload flow.
+- Not part of TV7's current Review Rating Filter assignment.
 
 File input:
 - FastAPI UploadFile objects from upload routes.

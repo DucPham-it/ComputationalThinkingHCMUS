@@ -12,7 +12,7 @@ import FilterPanel from "../components/recommendation/FilterPanel";
 import RankingPanel from "../components/recommendation/RankingPanel";
 import RecommendationList from "../components/recommendation/RecommendationList";
 
-import { fetchRecommendations } from "../services/placeService";
+import { fetchRecommendations } from "../services/recommendationService";
 import { useAuth } from "../hooks/useAuth";
 import { useApp } from "../hooks/useApp";
 import { getCurrentBrowserLocation } from "../utils/geolocation";

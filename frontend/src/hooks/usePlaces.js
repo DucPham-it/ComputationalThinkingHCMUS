@@ -13,7 +13,7 @@
  * - accept structured filter object instead of only query
  */
 import { useEffect, useState } from "react";
-import { fetchRecommendations } from "../services/placeService";
+import { fetchRecommendations } from "../services/recommendationService";
 
 export function usePlaces(initialQuery = "") {
   const [places, setPlaces] = useState([]);

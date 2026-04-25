@@ -1,7 +1,8 @@
 """Image upload routes.
 
 Owner:
-- TV7: Media Upload + Review Avatar.
+- Legacy/completed media upload flow.
+- Not part of TV7's current Review Rating Filter assignment.
 
 File input:
 - Multipart image files from profile, review form, and place request form.

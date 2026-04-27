@@ -22,48 +22,43 @@ from __future__ import annotations
 import re
 import unicodedata
 
+# ĐÃ CHỈNH SƠ QUA 7 HÀM NGAY BÊN DƯỚI
 
 ENTERTAINMENT_PATTERNS: dict[str, tuple[str, ...]] = {
     "restaurant": (
-        "ăn",
-        "an",
-        "quán ăn",
-        "quan an",
-        "nhà hàng",
-        "nha hang",
-        "restaurant",
-        "food",
-        "đồ ăn",
-        "do an",
+        "ăn", "an", "eat",
+        "quán ăn", "quan an", "restaurant",
+        "nhà hàng", "nha hang", "dining",
+        "đồ ăn", "do an", "food",
+        "ăn uống", "an uong", "meal"
     ),
+
     "cafe": (
-        "cafe",
-        "coffee",
-        "quán cafe",
-        "quan cafe",
-        "quán cà phê",
-        "quan ca phe",
-        "cà phê",
-        "ca phe",
+        "cà phê", "ca phe", "coffee",
+        "quán cafe", "quan cafe", "cafe",
+        "tiệm cafe", "tiem cafe", "coffee shop",
+        "chill"
     ),
+
     "movie_theater": (
-        "rạp",
-        "rap",
-        "cinema",
-        "movie",
-        "phim",
-        "chiếu phim",
-        "chieu phim",
+        "rạp phim", "rap phim", "cinema",
+        "xem phim", "movie"
     ),
-    "park": ("công viên", "cong vien", "park"),
+
+    "park": (
+        "công viên", "cong vien", "park",
+        "đi dạo", "di dao", "walk"
+    ),
+
     "mall": (
-        "trung tâm thương mại",
-        "trung tam thuong mai",
-        "shopping mall",
-        "mall",
+        "trung tâm thương mại", "trung tam thuong mai", "mall",
+        "mua sắm", "mua sam", "shopping"
     ),
-    "museum": ("bảo tàng", "bao tang", "museum"),
-    "hotel": ("khách sạn", "khach san", "hotel"),
+
+    "hotel": (
+        "khách sạn", "khach san", "hotel",
+        "nghỉ dưỡng", "nghi duong", "resort"
+    ),
 }
 
 ENTERTAINMENT_LABELS: dict[str, str] = {
@@ -77,23 +72,80 @@ ENTERTAINMENT_LABELS: dict[str, str] = {
 }
 
 BUDGET_PATTERNS: dict[str, tuple[str, ...]] = {
-    "low": ("rẻ", "re", "cheap", "tiết kiệm", "tiet kiem", "bình dân", "binh dan"),
-    "medium": ("vừa túi tiền", "vua tui tien", "tam tam", "average"),
-    "high": ("sang", "luxury", "cao cấp", "cao cap"),
+    "low": (
+        "rẻ", "cheap",
+        "bình dân", "binh dan", "budget",
+        "giá rẻ", "gia re", "low price",
+        "tiết kiệm", "tiet kiem", "saving"
+    ),
+
+    "medium": (
+        "vừa", "vua", "moderate",
+        "tầm trung", "tam trung", "mid range",
+        "ổn", "on", "ok", "oke", "okey", "oki", "okii","okay",
+    ),
+
+    "premium": (
+        "đắt", "dat", "expensive",
+        "mắc", "mac", "pricey",
+        "cao cấp", "cao cap", "premium",
+        "sang trọng", "sang trong", "luxury",
+        "đắt đỏ", "dat do", "high-end"
+    ),
 }
 
 COMPANION_PATTERNS: dict[str, tuple[str, ...]] = {
-    "couple": ("2 người", "hai người", "couple", "hẹn hò", "hen ho"),
-    "family": ("gia đình", "gia dinh", "family"),
-    "friends": ("bạn bè", "ban be", "friends", "team"),
-    "solo": ("một mình", "mot minh", "solo", "alone"),
+    "solo": (
+        "một mình", "mot minh", "alone"
+    ),
+
+    "couple": (
+        "cặp đôi", "cap doi", "couple",
+        "người yêu", "nguoi yeu", "lover",
+        "hẹn hò", "hen ho", "dating"
+    ),
+
+    "family": (
+        "gia đình", "gia dinh", "family",
+        "trẻ em", "tre em", "kids",
+        "cha mẹ", "cha me", "parents"
+    ),
+
+    "friends": (
+        "bạn bè", "ban be", "friends",
+        "nhóm", "nhom", "group",
+        "team",
+        "hội bạn", "hoi ban", "crew"
+    ),
 }
 
 TIME_PATTERNS: dict[str, tuple[str, ...]] = {
-    "morning": ("sáng", "sang", "morning", "breakfast"),
-    "afternoon": ("chiều", "chieu", "afternoon"),
-    "evening": ("tối", "toi", "evening", "dinner"),
-    "night": ("đêm", "dem", "night", "late night"),
+    "morning": (
+        "sáng", "sang", "morning",
+        "buổi sáng", "buoi sang", "early"
+    ),
+
+    "afternoon": (
+        "trưa", "trua", "noon",
+        "chiều", "chieu", "afternoon"
+    ),
+
+    "evening": (
+        "tối", "toi", "evening",
+        "đêm", "dem", "night",
+        "tối nay", "toi nay", "tonight", "overnight",
+    ),
+}
+
+DISTANCE_KEYWORDS = { # bổ sung
+    "near": (
+        "gần", "gan", "near",
+        "gần đây", "gan day", "nearby"
+    ),
+    "far": (
+        "xa", "far",
+        "xa quá", "xa qua", "far away"
+    )
 }
 
 STOP_WORDS = {
@@ -139,6 +191,12 @@ STOP_WORDS = {
     "around",
     "place",
     "places",
+    "trên", 
+    "tren",
+    "sao",
+    "nay",
+    "là", 
+    "la",
 }
 
 
@@ -157,18 +215,47 @@ def _normalize_text(text: str) -> str:
     return lowered
 
 
-def _contains_any(text: str, patterns: tuple[str, ...]) -> bool:
+"""def _contains_any(text: str, patterns: tuple[str, ...]) -> bool:
     return any(
         re.search(rf"(?<!\w){re.escape(pattern)}(?!\w)", text) is not None
         for pattern in patterns
-    )
+    )""" # Hàm này tạm bỏ vì không xử lí đúng cho trường hợp "Quán ăn đắt cho cặp đôi trên 3 sao"
+
+def _contains_any(text: str, patterns: tuple[str, ...]) -> bool:
+    words = text.split()
+    for p in patterns:
+        p_words = p.split()
+
+        # check multi-word phrase
+        for i in range(len(words) - len(p_words) + 1):
+            if words[i:i+len(p_words)] == p_words:
+                return True
+
+    return False
 
 
-def _extract_first_match(text: str, pattern_map: dict[str, tuple[str, ...]]) -> str | None:
+"""def _extract_first_match(text: str, pattern_map: dict[str, tuple[str, ...]]) -> str | None:
     for label, patterns in pattern_map.items():
         if _contains_any(text, patterns):
             return label
-    return None
+    return None""" # Hàm này tạm bỏ vì không xử lí đúng cho trường hợp "Quán ăn đắt cho cặp đôi trên 3 sao"
+
+def _extract_first_match(text: str, pattern_map: dict[str, tuple[str, ...]]) -> str | None:
+    matches = []
+
+    for label, patterns in pattern_map.items():
+        for p in patterns:
+            normalized_p = _normalize_text(p)
+            if normalized_p in text:
+                matches.append((label, normalized_p))
+
+    if not matches:
+        return None
+
+    # chọn pattern dài nhất (ưu tiên "cap doi" > "cap")
+    matches.sort(key=lambda x: len(x[1]), reverse=True)
+
+    return matches[0][0]
 
 
 def _collect_intent_tokens(*pattern_groups: tuple[str, ...]) -> set[str]:
@@ -272,7 +359,7 @@ def parse_search_text(query: str) -> dict:
     }
 
 
-def parse_recommendation_language_contract(query: str) -> dict:
+def parse_recommendation_language_contract(query: str) -> dict: #working
     """TODO TV3: full NLP contract for natural-language recommendation input.
 
     Owner:
@@ -305,10 +392,127 @@ def parse_recommendation_language_contract(query: str) -> dict:
     - Keep parse_search_text backward-compatible.
     - This function is intentionally empty so AI/NLP owner can implement and test it.
     """
-    pass
+      # ===== 1. handle empty =====
+    if not query or not query.strip():
+        return {
+            "intent": "unknown",
+            "entertainment_type": None,
+            "budget_level": None,
+            "companion_type": None,
+            "time_slot": None,
+            "location_hint": None,
+            "distance_hint_km": None,
+            "require_open_now": False,
+            "min_rating": None,
+            "keywords": [],
+            "confidence": 0.0,
+            "missing_fields": [],
+        }
+
+    # ===== 2. base parsing =====
+    base = parse_search_text(query)
+    text = base.get("normalized_query", "")
+
+    # ===== helper: match phrase đúng word =====
+    def contains_phrase(text: str, phrases: tuple[str, ...]) -> bool:
+        return any(re.search(rf"\b{re.escape(p)}\b", text) for p in phrases)
+
+    # ===== 3. DISTANCE =====
+    distance_hint_km = None
+
+    # "5km"
+    match_km = re.search(r"(\d+)\s*km", text)
+    if match_km:
+        distance_hint_km = int(match_km.group(1))
+
+    elif contains_phrase(text, DISTANCE_KEYWORDS["near"]):
+        distance_hint_km = 1
+
+    elif contains_phrase(text, DISTANCE_KEYWORDS["far"]):
+        distance_hint_km = 10
+
+    # ===== 4. RATING =====
+    min_rating = None
+    rating_match = re.search(r"(\d(\.\d)?)\s*sao", text)
+    if rating_match:
+        try:
+            min_rating = float(rating_match.group(1))
+        except ValueError:
+            pass
+
+    # ===== 5. OPEN NOW =====
+    require_open_now = contains_phrase(text, (
+        "dang mo", "mo cua", "open now", "con mo", "available"
+    ))
+
+    # ===== 6. LOCATION =====
+    location_hint = None
+
+    match_quan = re.search(r"quan\s*\d+", text)
+    if match_quan:
+        location_hint = match_quan.group(0)
+
+    else:
+        match_district = re.search(r"district\s*\d+", text)
+        if match_district:
+            location_hint = match_district.group(0)
+
+    # ===== 7. KEYWORDS CLEAN =====
+    keywords = [
+        k for k in base.get("content_terms", [])
+        if k not in STOP_WORDS
+    ]
+
+    # ===== 8. CONFIDENCE =====
+    score = 0
+
+    if base.get("entertainment_type"):
+        score += 1
+    if base.get("budget_level"):
+        score += 1
+    if base.get("companion_type"):
+        score += 1
+    if base.get("time_slot"):
+        score += 1
+    if distance_hint_km is not None:
+        score += 1
+    if min_rating is not None:
+        score += 1
+    if require_open_now:
+        score += 1
+
+    confidence = min(1.0, 0.2 + score * 0.1)
+
+    # ===== 9. MISSING FIELDS =====
+    missing_fields = []
+
+    if not base.get("entertainment_type"):
+        missing_fields.append("entertainment_type")
+
+    if distance_hint_km is None:
+        missing_fields.append("distance")
+
+    if not base.get("time_slot"):
+        missing_fields.append("time")
+
+    # ===== 10. RETURN =====
+    return {
+        "intent": "recommend_place",
+        "entertainment_type": base.get("entertainment_type"),
+        "budget_level": base.get("budget_level"),
+        "companion_type": base.get("companion_type"),
+        "time_slot": base.get("time_slot"),
+        "location_hint": location_hint,
+        "distance_hint_km": distance_hint_km,
+        "require_open_now": require_open_now,
+        "min_rating": min_rating,
+        "keywords": keywords,
+        "confidence": confidence,
+        "missing_fields": missing_fields,
+    }
 
 
-def extract_filter_fields_from_text(query: str) -> dict:
+def extract_filter_fields_from_text(query: str) -> dict: #working
     """TODO TV3: extract fields that should merge with explicit UI filters.
 
     Owner:
@@ -334,4 +538,24 @@ def extract_filter_fields_from_text(query: str) -> dict:
     Conflict rule:
     - UI filters win over NLP fields when both are present.
     """
-    pass
+    if not query or not query.strip():
+        return {}
+
+    parsed = parse_recommendation_language_contract(query)
+
+    filters = {
+        "max_distance_km": parsed.get("distance_hint_km"),
+        "min_rating": parsed.get("min_rating"),
+        "budget_level": parsed.get("budget_level"),
+        "preferred_types": None,
+        "require_open_now": parsed.get("require_open_now"),
+        "companion_type": parsed.get("companion_type"),
+        "time_slot": parsed.get("time_slot"),
+    }
+
+    # convert type → list
+    if parsed.get("entertainment_type"):
+        filters["preferred_types"] = [parsed["entertainment_type"]]
+
+    # remove None
+    return {k: v for k, v in filters.items() if v is not None}

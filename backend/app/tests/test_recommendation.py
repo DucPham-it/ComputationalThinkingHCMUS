@@ -1,6 +1,7 @@
 """Very small smoke tests for placeholder recommendation logic."""
 
 from app.recommendation import recommender
+from app.recommendation import ranking
 from app.recommendation.recommender import recommend_places
 
 
@@ -37,3 +38,161 @@ def test_recommend_places_returns_top_10(monkeypatch):
     items = recommend_places("restaurant", limit=10)
 
     assert len(items) == 10
+
+
+def test_recommend_places_user_new_uses_random_baseline():
+    places = [
+        {
+            "id": 1,
+            "name": "Quán cà phê mới",
+            "address": "Hà Nội",
+            "external_place_id": None,
+            "rating": 4.0,
+            "review_count": 10,
+            "latitude": None,
+            "longitude": None,
+            "distance_km": 1.0,
+            "price_level": None,
+            "price_range": None,
+            "open_now": True,
+            "photo_url": None,
+            "contact_phone": None,
+            "primary_type": "cafe",
+        }
+    ]
+
+    ranked = ranking.rank_places(places, query="")
+    assert ranked[0]["score_parts"]["random_baseline"] > 0
+
+
+def test_rank_places_returns_score_parts_and_explanation():
+    places = [
+        {
+            "id": 1,
+            "name": "Café cực ngon",
+            "address": "Hà Nội",
+            "external_place_id": None,
+            "rating": 4.5,
+            "review_count": 20,
+            "latitude": None,
+            "longitude": None,
+            "distance_km": 1.2,
+            "price_level": None,
+            "price_range": None,
+            "open_now": True,
+            "photo_url": None,
+            "contact_phone": None,
+            "primary_type": "cafe",
+        }
+    ]
+
+    ranked = ranking.rank_places(places, query="cafe")
+    assert ranked[0]["score"] >= 0
+    assert isinstance(ranked[0]["score_parts"], dict)
+    assert isinstance(ranked[0]["explanation"], dict)
+    assert ranked[0]["explanation"]["summary"]
+
+
+def test_rank_places_prefers_search_history():
+    places = [
+        {
+            "id": 1,
+            "name": "Quán café yên tĩnh",
+            "address": "Hà Nội",
+            "external_place_id": None,
+            "rating": 4.0,
+            "review_count": 10,
+            "latitude": None,
+            "longitude": None,
+            "distance_km": 2.0,
+            "price_level": None,
+            "price_range": None,
+            "open_now": None,
+            "photo_url": None,
+            "contact_phone": None,
+            "primary_type": "cafe",
+        },
+        {
+            "id": 2,
+            "name": "Bảo tàng lịch sử",
+            "address": "Hà Nội",
+            "external_place_id": None,
+            "rating": 4.0,
+            "review_count": 10,
+            "latitude": None,
+            "longitude": None,
+            "distance_km": 2.0,
+            "price_level": None,
+            "price_range": None,
+            "open_now": None,
+            "photo_url": None,
+            "contact_phone": None,
+            "primary_type": "museum",
+        },
+    ]
+
+    ranked = ranking.rank_places(places, query="", recent_queries=["cafe yên tĩnh"])
+    assert ranked[0]["primary_type"] == "cafe"
+    assert ranked[0]["score_parts"]["search_history"] > 0
+
+
+def test_rank_places_prefers_pick_history():
+    places = [
+        {
+            "id": 1,
+            "name": "Quán café gần đây",
+            "address": "Hà Nội",
+            "external_place_id": None,
+            "rating": 4.0,
+            "review_count": 10,
+            "latitude": 21.0,
+            "longitude": 105.8,
+            "distance_km": 1.2,
+            "price_level": None,
+            "price_range": None,
+            "open_now": None,
+            "photo_url": None,
+            "contact_phone": None,
+            "primary_type": "cafe",
+        },
+        {
+            "id": 2,
+            "name": "Nhà hàng BBQ",
+            "address": "Hà Nội",
+            "external_place_id": None,
+            "rating": 4.5,
+            "review_count": 8,
+            "latitude": 21.0,
+            "longitude": 105.82,
+            "distance_km": 1.5,
+            "price_level": None,
+            "price_range": None,
+            "open_now": None,
+            "photo_url": None,
+            "contact_phone": None,
+            "primary_type": "restaurant",
+        },
+    ]
+    picked_places = [
+        {
+            "id": 99,
+            "name": "Café quen thuộc",
+            "address": "Hà Nội",
+            "external_place_id": None,
+            "rating": 4.0,
+            "review_count": 18,
+            "latitude": 21.001,
+            "longitude": 105.801,
+            "distance_km": 1.0,
+            "price_level": None,
+            "price_range": None,
+            "open_now": None,
+            "photo_url": None,
+            "contact_phone": None,
+            "primary_type": "cafe",
+        }
+    ]
+
+    ranked = ranking.rank_places(places, query="", picked_places=picked_places)
+    assert ranked[0]["primary_type"] == "cafe"
+    assert ranked[0]["score_parts"]["pick_history"] > 0

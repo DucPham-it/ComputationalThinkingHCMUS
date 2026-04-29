@@ -131,24 +131,26 @@ def recommend_places(
     recent_queries: list[str] = []
     saved_ids: list[int] = []
     picked_ids: list[int] = []
+    picked_places: list[dict[str, Any]] = []
     preferred_types: list[str] = []
 
     if db is not None and user_id is not None:
         favorite_repo = FavoriteRepository(db)
         pick_repo = PickRepository(db)
         favorite_places = favorite_repo.list_by_user(user_id, limit=12)
-        picked_places = pick_repo.list_by_user(user_id, limit=12)
+        raw_picked_places = pick_repo.list_by_user(user_id, limit=12)
         recent_queries = SearchHistoryRepository(db).list_recent_queries(user_id, limit=12)
         saved_ids = [place.id for place in favorite_places]
-        picked_ids = [place.id for place in picked_places]
+        picked_ids = [place.id for place in raw_picked_places]
+        picked_places = [_place_to_dict(place) for place in raw_picked_places]
         history_preferred_types = [
             place.primary_type
-            for place in [*favorite_places, *picked_places]
+            for place in [*favorite_places, *raw_picked_places]
             if place.primary_type
         ]
         preferred_types = [*(preferred_types or []), *history_preferred_types]
         places = _dedupe_places(
-            places + [_place_to_dict(place) for place in favorite_places + picked_places]
+            places + [_place_to_dict(place) for place in favorite_places] + picked_places
         )
 
     filtered = apply_filters(
@@ -166,6 +168,7 @@ def recommend_places(
         recent_queries=recent_queries,
         saved_ids=saved_ids,
         picked_ids=picked_ids,
+        picked_places=picked_places,
         preferred_types=preferred_types,
     )
     return ranked[: max(1, int(limit or 10))]

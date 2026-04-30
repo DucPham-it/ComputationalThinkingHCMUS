@@ -17,6 +17,127 @@ Purpose:
 - produce a normalized search plan for local DB search and external fallback
 """
 
+# ============================================================
+# TODO (Future Improvements for NLP Parser - F2)
+# ============================================================
+
+# 1. Replace rule-based parsing with ML/NLP model
+# ------------------------------------------------------------
+# Current implementation uses rule-based keyword matching.
+# In future, this can be upgraded to:
+# - Intent classification model (e.g., BERT, PhoBERT)
+# - Named Entity Recognition (NER) for extracting fields
+# This will improve:
+# - Accuracy with complex sentences
+# - Better handling of ambiguous queries
+# - Reduced reliance on manual keyword lists
+
+
+# 2. Improve multilingual support
+# ------------------------------------------------------------
+# Currently supports:
+# - Vietnamese (with/without accents)
+# - Basic English keywords
+# Future improvements:
+# - Full English support (synonyms, grammar variations)
+# - Mixed-language query understanding (VN + EN)
+# - Slang normalization (e.g., "cheap cheap", "xịn xịn")
+
+
+# 3. Context-aware parsing (conversation memory)
+# ------------------------------------------------------------
+# Current parser handles only single-turn queries.
+# Future:
+# - Maintain user context across multiple queries
+# Example:
+#   User: "cafe gần đây"
+#   User: "cho cặp đôi"
+# → Combine into one structured request
+
+
+# 4. Smarter keyword extraction
+# ------------------------------------------------------------
+# Current keywords are filtered using STOP_WORDS and regex.
+# Future:
+# - Use TF-IDF or embedding-based keyword extraction
+# - Remove semantic noise automatically
+# - Support fuzzy matching (typo tolerance)
+
+
+# 5. Better confidence scoring
+# ------------------------------------------------------------
+# Current confidence is rule-based scoring.
+# Future:
+# - Train a confidence model based on prediction certainty
+# - Calibrate score using real user data
+# - Distinguish between "partial match" vs "strong match"
+
+
+# 6. Advanced negation handling
+# ------------------------------------------------------------
+# Current support:
+# - "không", "không cần"
+# Future:
+# - Handle complex negation:
+#   "không quá xa", "không quá đắt"
+# - Scope-aware negation (which field is affected)
+
+
+# 7. Expand domain knowledge
+# ------------------------------------------------------------
+# Add more categories:
+# - Nightlife, gym, spa, cinema, coworking space
+# - Food types: BBQ, vegetarian, street food
+# - Activity types: hiking, picnic, dating spots
+
+
+# 8. Location understanding improvement
+# ------------------------------------------------------------
+# Current:
+# - Basic extraction: "quận 1", "district 7"
+# Future:
+# - Integrate with geocoding API
+# - Normalize locations (e.g., "Q1" → "Quận 1")
+# - Support landmarks (e.g., "gần Bitexco")
+
+
+# 9. Time understanding enhancement
+# ------------------------------------------------------------
+# Current:
+# - morning, afternoon, evening
+# Future:
+# - Handle:
+#   "cuối tuần", "ngày mai", "tối thứ 7"
+# - Convert to actual datetime ranges
+
+
+# 10. Personalization support
+# ------------------------------------------------------------
+# Future:
+# - Adapt parsing based on user preferences
+# - Example:
+#   If user often chooses "cafe yên tĩnh" → boost relevance
+
+
+# 11. Error handling & fallback strategy
+# ------------------------------------------------------------
+# Current:
+# - Returns "unknown" intent for unclear queries
+# Future:
+# - Suggest clarification questions
+# - Provide fallback recommendations
+
+
+# 12. Logging & analytics
+# ------------------------------------------------------------
+# Future:
+# - Log user queries for analysis
+# - Improve keyword dictionary based on real usage
+# - Detect frequently failed parses
+
+
+# ============================================================
+
 from __future__ import annotations
 
 import re
@@ -73,7 +194,7 @@ ENTERTAINMENT_LABELS: dict[str, str] = {
 
 BUDGET_PATTERNS: dict[str, tuple[str, ...]] = {
     "low": (
-        "rẻ", "cheap",
+        "rẻ","re", "cheap",
         "bình dân", "binh dan", "budget",
         "giá rẻ", "gia re", "low price",
         "tiết kiệm", "tiet kiem", "saving"
@@ -82,7 +203,7 @@ BUDGET_PATTERNS: dict[str, tuple[str, ...]] = {
     "medium": (
         "vừa", "vua", "moderate",
         "tầm trung", "tam trung", "mid range",
-        "ổn", "on", "ok", "oke", "okey", "oki", "okii","okay",
+        "ổn", "ok", "oke", "okey", "oki", "okii","okay",
     ),
 
     "premium": (
@@ -121,8 +242,9 @@ COMPANION_PATTERNS: dict[str, tuple[str, ...]] = {
 
 TIME_PATTERNS: dict[str, tuple[str, ...]] = {
     "morning": (
-        "sáng", "sang", "morning",
-        "buổi sáng", "buoi sang", "early"
+        "sáng", "morning",
+        "buổi sáng", "buoi sang", "early",
+        "sáng nay", "sang nay",
     ),
 
     "afternoon": (
@@ -131,9 +253,17 @@ TIME_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
 
     "evening": (
-        "tối", "toi", "evening",
+        "tối", "evening",
         "đêm", "dem", "night",
         "tối nay", "toi nay", "tonight", "overnight",
+        "đêm nay", "dem nay",
+    ),
+    "weekend": (
+        "cuoi tuan", "cuối tuần", "weekend"
+    ),
+
+    "tomorrow": (
+        "ngay mai", "ngày mai", "tomorrow"
     ),
 }
 
@@ -160,6 +290,7 @@ STOP_WORDS = {
     "tại",
     "gan",
     "gần",
+    "day",
     "quanh",
     "khu",
     "vuc",
@@ -197,6 +328,26 @@ STOP_WORDS = {
     "nay",
     "là", 
     "la",
+    "buoi",
+    "ban",
+    "muon",
+    "mot",
+    "gi",
+    "do",
+    "đo",
+    "vui",
+    "tron",
+    "ven",
+    "ton",
+    "tai",
+    "on",
+    "dinh",
+    "me",
+    "for",
+    "friendly",
+    "uh",
+    "uhm",
+    "um",
 }
 
 
@@ -240,19 +391,33 @@ def _contains_any(text: str, patterns: tuple[str, ...]) -> bool:
             return label
     return None""" # Hàm này tạm bỏ vì không xử lí đúng cho trường hợp "Quán ăn đắt cho cặp đôi trên 3 sao"
 
+def _match_phrase(text: str, phrase: str) -> bool:
+    words = text.split()
+    p_words = phrase.split()
+
+    for i in range(len(words) - len(p_words) + 1):
+        if words[i:i+len(p_words)] == p_words:
+            return True
+    return False
+
+
 def _extract_first_match(text: str, pattern_map: dict[str, tuple[str, ...]]) -> str | None:
     matches = []
 
     for label, patterns in pattern_map.items():
         for p in patterns:
-            normalized_p = _normalize_text(p)
-            if normalized_p in text:
-                matches.append((label, normalized_p))
+            p_clean = p.lower().strip()
+
+            if not p_clean:
+                continue
+
+            # chỉ match trực tiếp, KHÔNG normalize pattern
+            if _match_phrase(text, p_clean):
+                matches.append((label, p_clean))
 
     if not matches:
         return None
 
-    # chọn pattern dài nhất (ưu tiên "cap doi" > "cap")
     matches.sort(key=lambda x: len(x[1]), reverse=True)
 
     return matches[0][0]
@@ -392,7 +557,7 @@ def parse_recommendation_language_contract(query: str) -> dict: #working
     - Keep parse_search_text backward-compatible.
     - This function is intentionally empty so AI/NLP owner can implement and test it.
     """
-      # ===== 1. handle empty =====
+       # ===== 1. handle empty =====
     if not query or not query.strip():
         return {
             "intent": "unknown",
@@ -417,19 +582,51 @@ def parse_recommendation_language_contract(query: str) -> dict: #working
     def contains_phrase(text: str, phrases: tuple[str, ...]) -> bool:
         return any(re.search(rf"\b{re.escape(p)}\b", text) for p in phrases)
 
+    # ===== helper: NEGATION =====
+    def is_negated(text: str, keyword: str) -> bool:
+        return any(
+            phrase in text
+            for phrase in [
+                f"khong {keyword}",
+                f"khong can {keyword}",
+                f"khong muon {keyword}",
+                f"khong thich {keyword}",
+            ]
+        )
+
     # ===== 3. DISTANCE =====
     distance_hint_km = None
 
-    # "5km"
     match_km = re.search(r"(\d+)\s*km", text)
+
     if match_km:
-        distance_hint_km = int(match_km.group(1))
+        value = int(match_km.group(1))
 
-    elif contains_phrase(text, DISTANCE_KEYWORDS["near"]):
-        distance_hint_km = 1
+        if contains_phrase(text, ("tren", "hon")):
+            distance_hint_km = value + 1
 
-    elif contains_phrase(text, DISTANCE_KEYWORDS["far"]):
-        distance_hint_km = 10
+        elif contains_phrase(text, ("duoi", "nho hon")):
+            distance_hint_km = max(0, value - 1)
+
+        elif contains_phrase(text, ("khong qua",)):
+            distance_hint_km = value
+
+        elif contains_phrase(text, ("khoang", "tam")):
+            distance_hint_km = value
+
+        else:
+            distance_hint_km = value
+
+    if distance_hint_km is None:
+        if contains_phrase(text, DISTANCE_KEYWORDS["near"]) and not is_negated(text, "gan"):
+            distance_hint_km = 1
+        elif contains_phrase(text, DISTANCE_KEYWORDS["far"]) and not is_negated(text, "xa"):
+            distance_hint_km = 10
+        elif match_km and contains_phrase(text, ("duoi", "nho hon")):
+            distance_hint_km = max(0, value - 1)
+
+        elif match_km and contains_phrase(text, ("khong qua",)):
+            distance_hint_km = value
 
     # ===== 4. RATING =====
     min_rating = None
@@ -451,24 +648,31 @@ def parse_recommendation_language_contract(query: str) -> dict: #working
     match_quan = re.search(r"quan\s*\d+", text)
     if match_quan:
         location_hint = match_quan.group(0)
-
     else:
         match_district = re.search(r"district\s*\d+", text)
         if match_district:
             location_hint = match_district.group(0)
 
-    # ===== 7. KEYWORDS CLEAN =====
-    keywords = [
-        k for k in base.get("content_terms", [])
-        if k not in STOP_WORDS
-    ]
+    # ===== 7. BUDGET  =====
+    budget_level = base.get("budget_level")
 
-    # ===== 8. CONFIDENCE =====
+    if is_negated(text, "re") or is_negated(text, "dat"):
+        budget_level = None
+
+    # ===== 8. KEYWORDS CLEAN =====
+    keywords = list(set([
+        k for k in base.get("content_terms", [])
+        if (k not in STOP_WORDS or k in {"choi"})
+        and len(k) >= 2
+        and k not in {"khong", "can", "gi", "do", "xa", "gan"}
+    ]))
+
+    # ===== 9. CONFIDENCE =====
     score = 0
 
     if base.get("entertainment_type"):
         score += 1
-    if base.get("budget_level"):
+    if budget_level:
         score += 1
     if base.get("companion_type"):
         score += 1
@@ -480,26 +684,52 @@ def parse_recommendation_language_contract(query: str) -> dict: #working
         score += 1
     if require_open_now:
         score += 1
+    if contains_phrase(text, ("muon",)):
+        score += 1
 
-    confidence = min(1.0, 0.2 + score * 0.1)
+    confidence = round(min(1.0, 0.3 + score * 0.12), 2)
 
-    # ===== 9. MISSING FIELDS =====
+    # ===== 10. MISSING FIELDS =====
     missing_fields = []
 
     if not base.get("entertainment_type"):
         missing_fields.append("entertainment_type")
 
-    if distance_hint_km is None:
+    if distance_hint_km is None and score >= 2:
         missing_fields.append("distance")
 
-    if not base.get("time_slot"):
+    if not base.get("time_slot") and score >= 2:
         missing_fields.append("time")
 
-    # ===== 10. RETURN =====
+    # ===== 11. RETURN =====
+    if base.get("entertainment_type") == "restaurant":
+        intent = "find_food"
+
+    elif base.get("entertainment_type"):
+        intent = "find_activity"
+
+    elif contains_phrase(text, ("di choi", "choi", "hang out", "relax")):
+        intent = "find_activity"
+
+    elif contains_phrase(text, ("di",)) and not keywords:
+        intent = "find_activity"
+
+    elif len(text.strip()) <= 2:
+        intent = "unknown"
+
+    elif keywords:
+        intent = "recommend_place"
+
+    elif contains_phrase(text, ("tim", "cho", "goi y", "suggest", "recommend")):
+        intent = "recommend_place"
+
+    else:
+        intent = "unknown"
+
     return {
-        "intent": "recommend_place",
+        "intent": intent,
         "entertainment_type": base.get("entertainment_type"),
-        "budget_level": base.get("budget_level"),
+        "budget_level": budget_level,
         "companion_type": base.get("companion_type"),
         "time_slot": base.get("time_slot"),
         "location_hint": location_hint,

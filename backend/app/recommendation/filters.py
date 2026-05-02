@@ -82,47 +82,6 @@ def apply_filters(places: list[dict[str, Any]], *, nlp_fields: dict[str, Any], u
     return final_results
 
 
-def get_mock_places() -> list[dict[str, Any]]:
-    # Cung cấp dữ liệu mô phỏng để đảm bảo bộ lọc hoạt động ổn định trong nhiều kịch bản,
-    # bao gồm cả trường hợp địa điểm bị thiếu thông tin hoặc trạng thái.
-    return [
-        {
-            "id": "p1", "name": "Quán Cà Phê Yên Tĩnh", "latitude": 10.762622, "longitude": 106.660172,
-            "primary_type": "cafe", "types": ["cafe", "quiet", "couple"], "rating": 4.5, "review_count": 120,
-            "price_level": "bình dân", "open_now": True
-        },
-        {
-            "id": "p2", "name": "Nhà Hàng Sang Trọng", "latitude": 10.770000, "longitude": 106.700000,
-            "primary_type": "restaurant", "types": ["restaurant", "family", "premium"], "rating": 4.8, "review_count": 500,
-            "price_level": "cao cấp", "open_now": False 
-        },
-        {
-            "id": "p3", "name": "Dã ngoại sinh viên", "latitude": 10.760000, "longitude": 106.680000, 
-            "primary_type": "park", "types": ["park", "friends", "cheap"], "rating": None, "review_count": 0,
-            "price_level": "rẻ", "open_now": True
-        }
-    ]
-
-def get_mock_filters() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    # Giả lập các quyết định của người dùng từ giao diện và câu từ tự nhiên
-    # để kiểm chứng nguyên tắc ưu tiên nguồn dữ liệu.
-    mock_nlp_fields = {
-        "budget_level": "bình dân",
-        "distance_hint_km": 5,
-        "require_open_now": True,
-        "intent": "find_place"
-    }
-    mock_ui_filters = {
-        "min_rating": 4.0,
-        "require_open_now": False, 
-        "entertainment_type": "cafe"
-    }
-    mock_user_location = {
-        "latitude": 10.762000,
-        "longitude": 106.660000
-    }
-    return mock_nlp_fields, mock_ui_filters, mock_user_location
-
 
 def build_filter_plan(nlp_fields: dict[str, Any], ui_filters: dict[str, Any]) -> dict[str, Any]:
     # Lập kế hoạch lọc thống nhất nhằm giải quyết mâu thuẫn giữa mong muốn nhập bằng chữ 
@@ -468,53 +427,3 @@ def apply_preferred_types_filter(places: list[dict[str, Any]], *, preferred_type
             
     return filtered_places
 
-
-def run_tests() -> None:
-    # Nghiệm thu 5 kịch bản cốt lõi để chứng minh hệ thống:
-    # 1. Thấu hiểu nghiệp vụ (giá cả linh hoạt, điểm số an toàn).
-    # 2. Xử lý thông minh khi có xung đột quyết định của khách hàng.
-    # 3. Không bao giờ để khách hàng "trắng tay" (Cơ chế nới lỏng).
-    # 4. Luôn đứng vững trước dữ liệu khuyết thiếu (Fail-safe).
-    
-    places = get_mock_places()
-    _, _, user_loc = get_mock_filters()
-    
-    print("=== NGHIỆM THU 5 TEST CASE CỐT LÕI ===")
-    
-    # Kịch bản 1: Kiểm chứng màng lọc ngân sách linh hoạt
-    print("\n--- TEST CASE 1: Ngân sách thông minh (Tìm mức 'bình dân') ---")
-    # Ta gọi trực tiếp màng lọc con để không bị cơ chế Fallback tổng can thiệp
-    res_1 = apply_budget_filter(places, budget_level="bình dân")
-    print("Mục đích: Khách chọn mức 'bình dân', hệ thống linh hoạt giới thiệu thêm cả không gian 'rẻ'.")
-    print(f"Thực tế lọt lưới: {[p['name'] for p in res_1]}")
-    
-    # Kịch bản 2: Kiểm chứng bộ lọc điểm số và cơ chế khoan hồng
-    print("\n--- TEST CASE 2: Uy tín cộng đồng (Yêu cầu Rating >= 4.6) ---")
-    res_2 = apply_rating_filter(places, min_rating=4.6)
-    print("Mục đích: Loại bỏ quán điểm thấp (4.5), giữ quán chất lượng (4.8), và đặc biệt ân xá cho địa điểm mới chưa có điểm đánh giá.")
-    print(f"Thực tế lọt lưới: {[p['name'] for p in res_2]}")
-
-    # Kịch bản 3: Giải quyết xung đột giữa chữ viết tự nhiên (NLP) và nút bấm giao diện (UI)
-    print("\n--- TEST CASE 3: Điều phối xung đột UI và NLP ---")
-    places_3 = get_mock_places()
-    # Chỉ cần gán thẳng vào biến res_3
-    res_3 = apply_filters(places_3, nlp_fields={"budget_level": "bình dân"}, ui_filters={"budget_level": "cao cấp"}, user_location=user_loc)
-    print(f"Khách gõ chữ 'bình dân' nhưng lại bấm nút 'cao cấp' trên màn hình.")
-    print(f"Hệ thống ưu tiên giao diện, kết quả lọt lưới: {[p['name'] for p in res_3]}")
-
-    print("\n--- TEST CASE 4: Cơ chế chống ngõ cụt (Fallback Strategy) ---")
-    places_4 = get_mock_places()
-    ui_4 = {"min_rating": 5.0, "budget_level": "rẻ"}
-    res_4 = apply_filters(places_4, nlp_fields={}, ui_filters=ui_4, user_location=user_loc)
-    print("Khách ép điều kiện quá gắt. Thay vì báo lỗi trắng màn hình, hệ thống chủ động nới lỏng để vớt:")
-    print(f"Số lượng vớt được an toàn: {len(res_4)} địa điểm (Sẵn sàng đưa sang module Xếp hạng).")
-
-    print("\n--- TEST CASE 5: Chống sập hệ thống (Fail-safe) ---")
-    places_5 = get_mock_places()
-    ui_5 = {"max_distance_km": 5.0, "require_open_now": True}
-    res_5 = apply_filters(places_5, nlp_fields={}, ui_filters=ui_5, user_location=user_loc)
-    print("Dù database quán 'Dã ngoại sinh viên' bị khuyết sạch dữ liệu, hệ thống vẫn lướt qua mượt mà.")
-    print("Trạng thái: PASSED - KHÔNG BỊ CRASH.")
-
-if __name__ == "__main__":
-    run_tests()

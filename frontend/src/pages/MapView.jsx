@@ -106,29 +106,29 @@ function getDatabasePlaceId(place) {
 }
 
 export function buildRouteDestinationFromMapPick(place) {
-    /**
-     * TODO TV6: normalize a map marker/place into route destination state.
-     *
-     * Owner:
-     * - TV6.
-     *
-     * Input:
-     * - place: marker payload from MarkerList or resolved map click:
-     *   - id: database place id or temporary id
-     *   - name: display name
-     *   - address: address text
-     *   - latitude/longitude or lat/lng
-     *   - photo_url, primary_type, can_view, can_save when available
-     *
-     * Output:
-     * - object for AppContext.selectedPlace:
-     *   { place_id, id, name, address, latitude, longitude, photo_url,
-     *     primary_type, source, can_view, can_save }
-     *
-     * Rule:
-     * - Database-backed place should call recordPlacePick(place.id).
-     * - Temporary map point should still navigate to Route, but cannot be saved/viewed.
-     */
+    const lat = place.latitude ?? place.lat;
+    const lng = place.longitude ?? place.lng;
+
+    if (lat == null || lng == null) {
+        throw new Error("Missing coordinates");
+    }
+
+    const databasePlaceId = getDatabasePlaceId(place);
+    const isTemp = place._isTemporaryMapSelection || false;
+
+    return {
+        place_id: databasePlaceId,
+        id: place.id,
+        name: place.name || "Custom destination",
+        address: place.address || null,
+        latitude: lat,
+        longitude: lng,
+        photo_url: place.photo_url || null,
+        primary_type: place.primary_type || place.category || null,
+        source: isTemp ? "map_click" : "map_marker",
+        can_view: place.can_view ?? place._canView ?? false,
+        can_save: place.can_save ?? place._canSave ?? false,
+    };
 }
 
 export default function MapView({ places = [] }) {
@@ -232,6 +232,14 @@ export default function MapView({ places = [] }) {
     }
 
     function handlePickPlace(place) {
+        let destination;
+        try {
+            destination = buildRouteDestinationFromMapPick(place);
+        } catch (error) {
+            alert("This marker is missing coordinates. Cannot navigate to route.");
+            return;
+        }
+
         const databasePlaceId = getDatabasePlaceId(place);
         if (databasePlaceId !== null) {
             recordPlacePick(databasePlaceId).catch((error) => {
@@ -240,7 +248,7 @@ export default function MapView({ places = [] }) {
         }
 
         confirmPlace(place);
-        setPickedPlace(sanitizePickedPlace(place));
+        setPickedPlace(destination);
         navigate("/route");
     }
 
@@ -249,6 +257,11 @@ export default function MapView({ places = [] }) {
     }
 
     async function handleMapClick(point) {
+        // Optimistic UI: Show point immediately to remove lag
+        const fallbackPlace = buildTemporaryMapPlace(point);
+        mergePlaces(fallbackPlace);
+        setSelectedPlaceId(fallbackPlace.id);
+
         try {
             const resolvedPlace = await resolvePlaceFromCoordinates({
                 latitude: point.lat,
@@ -259,23 +272,18 @@ export default function MapView({ places = [] }) {
                 ...resolvedPlace,
                 _isTemporaryMapSelection: !alreadyListed,
             };
-            mergePlaces(previewPlace);
-            setSelectedPlaceId(previewPlace.id);
-            if (
-                typeof resolvedPlace.latitude === "number" &&
-                typeof resolvedPlace.longitude === "number"
-            ) {
-                setMapCenter({
-                    lat: resolvedPlace.latitude,
-                    lng: resolvedPlace.longitude,
-                });
-            }
+
+            // Update state with resolved data, ensuring we don't overwrite a newer click
+            setRecommendationPlaces((prev) => {
+                const withoutFallback = prev.filter(p => p.id !== fallbackPlace.id);
+                return [previewPlace, ...withoutFallback.filter(p => p.id !== previewPlace.id)];
+            });
+            setSelectedPlaceId((prev) => prev === fallbackPlace.id ? previewPlace.id : prev);
+
+            // Map panning is removed to prevent the map from "jumping" when rapid clicks resolve out of order
         } catch (error) {
-            const fallbackPlace = buildTemporaryMapPlace(point);
-            mergePlaces(fallbackPlace);
-            setSelectedPlaceId(fallbackPlace.id);
-            setMapCenter(point);
             console.error("Failed to resolve clicked point", error);
+            // Fallback is already showing, nothing to do
         }
     }
 

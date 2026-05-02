@@ -84,16 +84,30 @@ export default function PlacePopupCard({
               {place.review_count ?? 0} reviews
             </span>
           </div>
+          {place.distance_km != null ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#64748b" }}>
+              <MapPin size={13} />
+              <span>{place.distance_km} km away</span>
+            </div>
+          ) : null}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#64748b" }}>
             <MapPin size={13} />
-            <span>{place.distance_km ?? "N/A"} km away</span>
+            <span style={{ fontFamily: "monospace" }}>
+              {place.lat?.toFixed(5) ?? place.latitude?.toFixed(5) ?? "N/A"}, {place.lng?.toFixed(5) ?? place.longitude?.toFixed(5) ?? "N/A"}
+            </span>
           </div>
         </div>
+
+        {onPrimaryAction ? (
+          <div style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600, marginTop: "4px", textAlign: "center" }}>
+            Do you want to use this location for your route?
+          </div>
+        ) : null}
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
+            gridTemplateColumns: onPrimaryAction ? "1fr 1fr 1fr" : "1fr 1fr",
             gap: "8px",
             marginTop: "2px",
           }}
@@ -116,14 +130,16 @@ export default function PlacePopupCard({
             <Heart size={14} style={{ marginRight: "4px" }} />
             Save
           </button>
-          <button
-            className="btn-primary"
-            style={{ padding: "8px 10px", borderRadius: "10px", fontWeight: 700 }}
-            onClick={() => onPrimaryAction?.(place)}
-          >
-            <Route size={14} style={{ marginRight: "4px" }} />
-            {primaryActionLabel}
-          </button>
+          {onPrimaryAction ? (
+            <button
+              className="btn-primary"
+              style={{ padding: "8px 10px", borderRadius: "10px", fontWeight: 700 }}
+              onClick={() => onPrimaryAction(place)}
+            >
+              <Route size={14} style={{ marginRight: "4px" }} />
+              {primaryActionLabel}
+            </button>
+          ) : null}
         </div>
 
         {onSuggestChange ? (

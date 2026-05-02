@@ -85,27 +85,28 @@ export default function MarkerList({
             pathOptions={markerAppearance.pathOptions}
             eventHandlers={{
               click: () => handleMarkerClick(place),
-              popupclose: handleCloseClick,
             }}
-          >
-            {selected?.id === place.id ? (
-              <Popup closeButton>
-                <PlacePopupCard
-                  place={place}
-                  onViewPlace={onViewPlace}
-                  onSavePlace={onSavePlace}
-                  onSuggestChange={onSuggestChange}
-                  onPrimaryAction={onPickPlace}
-                  onCancelSelection={onDismissPlace ? handleCloseClick : undefined}
-                  primaryActionLabel={primaryActionLabel}
-                  selectionModeLabel={selectionModeLabel}
-                  cancelActionLabel={cancelActionLabel}
-                />
-              </Popup>
-            ) : null}
-          </CircleMarker>
+          />
         );
       })}
+      {selected ? (
+        <Popup
+          position={[selected.lat ?? selected.latitude, selected.lng ?? selected.longitude]}
+          onClose={handleCloseClick}
+        >
+          <PlacePopupCard
+            place={selected}
+            onViewPlace={onViewPlace}
+            onSavePlace={onSavePlace}
+            onSuggestChange={onSuggestChange}
+            onPrimaryAction={onPickPlace}
+            onCancelSelection={onDismissPlace ? handleCloseClick : undefined}
+            primaryActionLabel={primaryActionLabel}
+            selectionModeLabel={selectionModeLabel}
+            cancelActionLabel={cancelActionLabel}
+          />
+        </Popup>
+      ) : null}
     </>
   );
 }

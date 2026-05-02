@@ -14,6 +14,7 @@ import {
 import { addFavorite } from "../services/favoriteService";
 import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/mapPickService";
 import { getRoute } from "../services/routeService";
+import { buildRouteDestinationFromMapPick } from "./MapView";
 
 const TRAVEL_MODES = [
   { value: "DRIVING", label: "Driving" },
@@ -231,35 +232,40 @@ export default function RouteView() {
 
   async function applyMapPoint(point, target) {
     setRouteError("");
+    
+    // Optimistic UI: show fallback immediately
+    const fallbackPlace = buildTemporaryMapPlace(point);
+    setRecommendationPlaces((prev) => [
+      fallbackPlace,
+      ...prev.filter((place) => place.id !== fallbackPlace.id),
+    ]);
+    setSelectedPopupPlaceId(fallbackPlace.id);
+    setLocationNotice("Fetching location data...");
+
     try {
       const resolvedPlace = await resolvePlaceFromCoordinates({
         latitude: point.lat,
         longitude: point.lng,
       });
+      // recommendationPlaces might be stale in closure, rely on functional updates
       const alreadyListed = recommendationPlaces.some((place) => place.id === resolvedPlace.id);
       const previewPlace = {
         ...resolvedPlace,
         _isTemporaryMapSelection: !alreadyListed,
       };
-      const mergedPlaces = [
-        previewPlace,
-        ...recommendationPlaces.filter((place) => place.id !== resolvedPlace.id),
-      ];
-      setRecommendationPlaces(mergedPlaces);
-      setSelectedPopupPlaceId(previewPlace.id);
+
+      setRecommendationPlaces((prev) => {
+        const withoutFallback = prev.filter(p => p.id !== fallbackPlace.id);
+        return [previewPlace, ...withoutFallback.filter(p => p.id !== previewPlace.id)];
+      });
+      setSelectedPopupPlaceId((prev) => prev === fallbackPlace.id ? previewPlace.id : prev);
+
       setLocationNotice(
         target === "origin"
           ? "Map point previewed. Use Pick on map to confirm it as the start point."
           : "Map point previewed. Use Pick on map to confirm it as the destination."
       );
-      return;
     } catch (error) {
-      const fallbackPlace = buildTemporaryMapPlace(point);
-      setRecommendationPlaces((previousPlaces) => [
-        fallbackPlace,
-        ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
-      ]);
-      setSelectedPopupPlaceId(fallbackPlace.id);
       setLocationNotice(
         target === "origin"
           ? "Map point previewed manually. Use Pick on map to confirm it as the start point."
@@ -296,6 +302,11 @@ export default function RouteView() {
         ? { lat: place.latitude, lng: place.longitude }
         : null;
 
+    if (!resolvedPoint) {
+      alert("This marker is missing coordinates.");
+      return;
+    }
+
     if (selectionTarget === "origin") {
       setOriginMode("manual");
       setOriginPoint(resolvedPoint);
@@ -309,13 +320,21 @@ export default function RouteView() {
       return;
     }
 
+    let destination;
+    try {
+      destination = buildRouteDestinationFromMapPick(place);
+    } catch (error) {
+      alert("This marker is missing coordinates. Cannot pick as destination.");
+      return;
+    }
+
     if (typeof place.id === "number") {
       recordPlacePick(place.id).catch((error) => {
         console.error("Failed to record place pick", error);
       });
     }
 
-    setSelectedPlace(place._isLocalOnly ? null : sanitizePickedPlace(place));
+    setSelectedPlace(place._isLocalOnly ? null : destination);
     setDestinationPoint(resolvedPoint);
     setDestinationInput(
       place.address ||

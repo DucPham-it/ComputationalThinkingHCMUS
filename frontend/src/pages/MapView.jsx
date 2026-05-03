@@ -257,7 +257,7 @@ export default function MapView({ places = [] }) {
     }
 
     async function handleMapClick(point) {
-        // Optimistic UI: Show point immediately to remove lag
+        // Show point immediately to remove lag
         const fallbackPlace = buildTemporaryMapPlace(point);
         mergePlaces(fallbackPlace);
         setSelectedPlaceId(fallbackPlace.id);

@@ -64,7 +64,6 @@ SUPABASE_STORAGE_PLACE_BUCKET=place-images
 SUPABASE_STORAGE_REVIEW_BUCKET=review-images
 NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 OSRM_BASE_URL=https://router.project-osrm.org
-WEATHER_API_KEY=
 JWT_SECRET=your_jwt_secret
 ```
 

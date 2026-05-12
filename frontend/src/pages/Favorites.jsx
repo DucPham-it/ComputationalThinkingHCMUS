@@ -8,15 +8,24 @@ import Empty from "../components/common/Empty";
 import { fetchFavorites, removeFavorite } from "../services/favoriteService";
 import { recordPlacePick } from "../services/mapPickService";
 import { useApp } from "../hooks/useApp";
+import { useAuth } from "../hooks/useAuth";
 
 export default function Favorites() {
   const navigate = useNavigate();
   const { setSelectedPlace } = useApp();
+  const { isAuthenticated } = useAuth();
   const [places, setPlaces] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isAuthenticated);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setPlaces([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+
     async function loadFavorites() {
       try {
         setLoading(true);
@@ -32,7 +41,7 @@ export default function Favorites() {
     }
 
     loadFavorites();
-  }, []);
+  }, [isAuthenticated]);
 
   async function handleRemove(placeId) {
     try {
@@ -58,6 +67,16 @@ export default function Favorites() {
 
   if (loading) {
     return <LoadingSpinner message="Loading your saved places..." />;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Empty
+        icon={Heart}
+        title="Sign in required"
+        message="Sign in before opening your saved places."
+      />
+    );
   }
 
   if (error) {

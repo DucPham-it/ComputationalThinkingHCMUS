@@ -18,7 +18,8 @@ class RecommendationQuery(BaseModel):
     - start_time: user intended visit time/time slot
     - companion_type: solo, couple, family, friends
     - latitude/longitude: browser GPS or map-selected point
-    - max_distance_km: radius constraint
+    - max_distance_km: optional radius constraint. Defaults to no hard
+      distance filter so suggestions can still return 10 places.
     - preferred_types: explicit UI category list
     - require_open_now: only suggest currently-open places when true
     - min_rating: minimum average rating filter
@@ -36,7 +37,7 @@ class RecommendationQuery(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     manual_address: str | None = None
-    max_distance_km: float | None = Field(default=5, ge=0)
+    max_distance_km: float | None = Field(default=None, ge=0)
     preferred_types: list[str] = Field(default_factory=list)
     require_open_now: bool = False
     min_rating: float | None = Field(default=None, ge=0, le=5)

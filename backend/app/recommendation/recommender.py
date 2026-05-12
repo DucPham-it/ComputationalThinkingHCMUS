@@ -11,19 +11,18 @@ File input:
 File output:
 - Top 10 place dictionaries consumed by frontend RecommendationList.
 
-Conflict note:
+Module ownership:
 - TV3 edits app/recommendation/nlp_parser.py.
 - TV4 edits app/recommendation/filters.py.
-- TV5 edits app/recommendation/ranking.py and this orchestration file only when
-  helper contracts are stable.
+- TV5 edits app/recommendation/ranking.py and this orchestration file.
 """
 
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.recommendation.filters import apply_filters
-from app.recommendation.nlp_parser import parse_search_text
+from app.recommendation.filters import apply_filters, build_filter_plan
+from app.recommendation.nlp_parser import extract_filter_fields_from_text, parse_search_text
 from app.recommendation.ranking import rank_places
 from app.repositories.favorite_repo import FavoriteRepository
 from app.repositories.pick_repo import PickRepository
@@ -146,7 +145,7 @@ def recommend_places(
     - Each place should contain id, name, address, latitude, longitude, rating,
       review_count, primary_type, photo_url, open_now, and score when available.
 
-    Contract boundaries:
+    Module flow:
     - NLP parsing comes from TV3 helpers in nlp_parser.py.
     - Candidate filtering comes from TV4 helpers in filters.py.
     - Ranking/scoring comes from TV5 helpers in ranking.py.
@@ -155,13 +154,22 @@ def recommend_places(
       parameters or agree a contract change first.
     """
     parsed = parse_search_text(query)
-    resolved_type = entertainment_type or parsed.get("entertainment_type")
-    resolved_budget = budget_level or parsed.get("budget_level")
-    resolved_companion = companion_type or parsed.get("companion_type")
-    resolved_time = start_time or parsed.get("time_slot")
-    resolved_allowed_types = list(preferred_types or [])
-    if resolved_type and resolved_type not in resolved_allowed_types:
-        resolved_allowed_types.append(resolved_type)
+    nlp_filters = extract_filter_fields_from_text(query)
+    explicit_types = list(preferred_types or [])
+    if entertainment_type and entertainment_type not in explicit_types:
+        explicit_types.append(entertainment_type)
+
+    ui_filters = {
+        "allowed_types": explicit_types,
+        "budget_level": budget_level,
+        "companion_type": companion_type,
+        "time_slot": start_time,
+        "max_distance_km": max_distance_km,
+        "require_open_now": require_open_now,
+        "min_rating": min_rating,
+    }
+    filter_plan = build_filter_plan(nlp_filters, ui_filters)
+    resolved_allowed_types = list(filter_plan.get("allowed_types") or [])
 
     places = search_places(
         query=parsed.get("local_query") or query,
@@ -173,13 +181,15 @@ def recommend_places(
     recent_queries: list[str] = []
     saved_ids: list[int] = []
     picked_ids: list[int] = []
-    preferred_types: list[str] = []
+    picked_place_dicts: list[dict[str, Any]] = []
+    ranking_preferred_types: list[str] = list(resolved_allowed_types)
 
     if db is not None and user_id is not None:
         favorite_repo = FavoriteRepository(db)
         pick_repo = PickRepository(db)
         favorite_places = favorite_repo.list_by_user(user_id, limit=12)
         picked_places = pick_repo.list_by_user(user_id, limit=12)
+        picked_place_dicts = [_place_to_dict(place) for place in picked_places]
         recent_queries = SearchHistoryRepository(db).list_recent_queries(user_id, limit=12)
         saved_ids = [place.id for place in favorite_places]
         picked_ids = [place.id for place in picked_places]
@@ -188,18 +198,20 @@ def recommend_places(
             for place in [*favorite_places, *picked_places]
             if place.primary_type
         ]
-        preferred_types = [*(preferred_types or []), *history_preferred_types]
+        ranking_preferred_types = [*ranking_preferred_types, *history_preferred_types]
         places = _dedupe_places(
-            places + [_place_to_dict(place) for place in favorite_places + picked_places]
+            places + [_place_to_dict(place) for place in favorite_places] + picked_place_dicts
         )
 
     filtered = apply_filters(
         places=places,
-        max_distance_km=max_distance_km,
+        max_distance_km=filter_plan.get("max_distance_km"),
         allowed_types=resolved_allowed_types or None,
-        require_open_now=require_open_now,
-        min_rating=min_rating,
-        budget_level=resolved_budget,
+        require_open_now=bool(filter_plan.get("require_open_now")),
+        min_rating=filter_plan.get("min_rating"),
+        budget_level=filter_plan.get("budget_level"),
+        companion_type=filter_plan.get("companion_type"),
+        time_slot=filter_plan.get("time_slot"),
     )
     ranked = rank_places(
         filtered,
@@ -208,7 +220,8 @@ def recommend_places(
         recent_queries=recent_queries,
         saved_ids=saved_ids,
         picked_ids=picked_ids,
-        preferred_types=preferred_types,
+        picked_places=picked_place_dicts,
+        preferred_types=ranking_preferred_types,
     )
     return ranked[: max(1, int(limit or 10))]
 
@@ -220,7 +233,7 @@ def build_recommendation_context(
     query: str,
     ui_filters: dict[str, Any],
 ) -> dict[str, Any]:
-    """TODO TV5: collect all context for one recommendation request.
+    """Collect all context for one recommendation request.
 
     Owner:
     - TV5.
@@ -242,11 +255,62 @@ def build_recommendation_context(
       - recent_queries, max 80
       - candidate_seed_strategy: random, picks, history, query
     """
-    pass
+    parsed = parse_search_text(query)
+    nlp_filters = extract_filter_fields_from_text(query)
+    explicit_types = list(ui_filters.get("preferred_types") or ui_filters.get("allowed_types") or [])
+    entertainment_type = ui_filters.get("entertainment_type")
+    if entertainment_type and entertainment_type not in explicit_types:
+        explicit_types.append(entertainment_type)
+
+    effective_filters = build_filter_plan(
+        nlp_filters,
+        {
+            **ui_filters,
+            "allowed_types": explicit_types,
+            "time_slot": ui_filters.get("time_slot") or ui_filters.get("start_time"),
+        },
+    )
+
+    latitude = ui_filters.get("latitude")
+    longitude = ui_filters.get("longitude")
+    candidates = search_places(
+        query=parsed.get("local_query") or query,
+        external_query="",
+        latitude=latitude,
+        longitude=longitude,
+        db=db,
+    )
+
+    favorite_repo = FavoriteRepository(db)
+    pick_repo = PickRepository(db)
+    saved_places = [_place_to_dict(place) for place in favorite_repo.list_by_user(user_id, limit=12)]
+    picked_places = [_place_to_dict(place) for place in pick_repo.list_by_user(user_id, limit=12)]
+    recent_queries = SearchHistoryRepository(db).list_recent_queries(user_id, limit=80)
+
+    candidate_seed_strategy = "query"
+    if not query.strip():
+        if picked_places:
+            candidate_seed_strategy = "picks"
+        elif recent_queries:
+            candidate_seed_strategy = "history"
+        else:
+            candidate_seed_strategy = "random"
+
+    return {
+        "parsed_nlp": parsed,
+        "nlp_filters": nlp_filters,
+        "effective_filters": effective_filters,
+        "picked_places": picked_places,
+        "saved_places": saved_places,
+        "recent_queries": recent_queries,
+        "candidate_seed_strategy": candidate_seed_strategy,
+        "candidates": _dedupe_places(candidates + saved_places + picked_places),
+        "query": query,
+    }
 
 
 def recommend_top_10_contract(context: dict[str, Any]) -> list[dict[str, Any]]:
-    """TODO TV5: final top-10 recommendation orchestration contract.
+    """Run the final top-10 recommendation orchestration contract.
 
     Owner:
     - TV5.
@@ -261,4 +325,36 @@ def recommend_top_10_contract(context: dict[str, Any]) -> list[dict[str, Any]]:
       longitude, price_level, price_range, open_now, photo_url, contact_phone,
       primary_type, score, score_parts, explanation.
     """
-    pass
+    effective_filters = context.get("effective_filters") or {}
+    candidates = context.get("candidates") or []
+    saved_places = context.get("saved_places") or []
+    picked_places = context.get("picked_places") or []
+    saved_ids = [place.get("id") for place in saved_places if place.get("id") is not None]
+    picked_ids = [place.get("id") for place in picked_places if place.get("id") is not None]
+    preferred_types = list(effective_filters.get("allowed_types") or [])
+
+    for place in [*saved_places, *picked_places]:
+        primary_type = place.get("primary_type")
+        if primary_type:
+            preferred_types.append(primary_type)
+
+    filtered = apply_filters(
+        places=candidates,
+        max_distance_km=effective_filters.get("max_distance_km"),
+        allowed_types=effective_filters.get("allowed_types"),
+        require_open_now=bool(effective_filters.get("require_open_now")),
+        min_rating=effective_filters.get("min_rating"),
+        budget_level=effective_filters.get("budget_level"),
+        companion_type=effective_filters.get("companion_type"),
+        time_slot=effective_filters.get("time_slot"),
+    )
+    ranked = rank_places(
+        filtered,
+        query=context.get("query") or "",
+        recent_queries=context.get("recent_queries") or [],
+        saved_ids=saved_ids,
+        picked_ids=picked_ids,
+        picked_places=picked_places,
+        preferred_types=preferred_types,
+    )
+    return ranked[:10]

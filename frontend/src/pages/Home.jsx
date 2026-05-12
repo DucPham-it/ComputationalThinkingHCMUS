@@ -8,7 +8,10 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 import Empty from "../components/common/Empty";
 import Error from "../components/common/Error";
 
-import FilterPanel from "../components/recommendation/FilterPanel";
+import FilterPanel, {
+    EMPTY_RECOMMENDATION_FILTERS,
+    buildRecommendationFilterPayload,
+} from "../components/recommendation/FilterPanel";
 import RankingPanel from "../components/recommendation/RankingPanel";
 import RecommendationList from "../components/recommendation/RecommendationList";
 
@@ -25,7 +28,7 @@ import { getCurrentBrowserLocation } from "../utils/geolocation";
  *
  * File input:
  * - User natural-language query from SearchBar.
- * - FilterPanel state once TV2 wires controlled filters.
+ * - Controlled FilterPanel state.
  * - Browser GPS/currentLocation from AppContext.
  * - Authentication/profile state from useAuth.
  *
@@ -34,17 +37,15 @@ import { getCurrentBrowserLocation } from "../utils/geolocation";
  * - Stores top 10 returned places in local state and AppContext.
  * - Renders loading, empty, error, and RecommendationList states.
  *
- * TODO TV2:
- * - Add controlled filter state.
- * - Merge buildRecommendationFilterPayload output into handleSearch.
- * - Ensure query-only, filter-only, and query+filter cases all call the API.
+ * Implementation:
+ * - Query-only, filter-only, and query+filter searches all call the same API.
+ * - FilterPanel emits backend-ready payload through buildRecommendationFilterPayload.
  */
 export default function Home() {
     const { isAuthenticated, hasCompletedProfile } = useAuth();
     const {
         currentLocation,
         setCurrentLocation,
-        recommendationPlaces,
         setRecommendationPlaces
     } = useApp();
     const [query, setQuery] = useState("");
@@ -52,6 +53,7 @@ export default function Home() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [locationStatus, setLocationStatus] = useState("");
+    const [filters, setFilters] = useState(EMPTY_RECOMMENDATION_FILTERS);
     
     // State UX để đổi tiêu đề khi đã thực hiện tìm kiếm
     const [hasSearched, setHasSearched] = useState(false);
@@ -60,31 +62,64 @@ export default function Home() {
     const resultsRef = useRef(null);
     const canUseChat = isAuthenticated && hasCompletedProfile;
 
-    async function loadSuggestions() {
+    function buildLocationParams() {
+        const latitude = currentLocation?.latitude ?? currentLocation?.lat;
+        const longitude = currentLocation?.longitude ?? currentLocation?.lng;
+
+        return {
+            latitude,
+            longitude,
+        };
+    }
+
+    function scrollToResults() {
+        if (resultsRef.current) {
+            resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    }
+
+    async function runRecommendationSearch(nextQuery = query, filterPayload = buildRecommendationFilterPayload(filters)) {
         if (!canUseChat) {
             return;
         }
 
+        const trimmedQuery = nextQuery.trim();
+        const hasFilters = Object.keys(filterPayload).length > 0;
+
         try {
+            setHasSearched(Boolean(trimmedQuery || hasFilters));
             setLoading(true);
             setError(null);
 
             const data = await fetchRecommendations({
-                latitude: currentLocation?.lat,
-                longitude: currentLocation?.lng,
+                ...(trimmedQuery ? { query: trimmedQuery } : {}),
+                ...filterPayload,
+                ...buildLocationParams(),
             });
             const items = data.items ?? [];
             setPlaces(items);
             setRecommendationPlaces(items);
-            setHasSearched(false);
+
+            if (trimmedQuery || hasFilters) {
+                scrollToResults();
+            }
         } catch (err) {
             console.error(err);
-            setError("Suggestions are unavailable right now. Please try again.");
+            setError("Search failed. Please try again.");
             setPlaces([]);
             setRecommendationPlaces([]);
         } finally {
             setLoading(false);
         }
+    }
+
+    async function loadSuggestions() {
+        if (!canUseChat) {
+            return;
+        }
+
+        await runRecommendationSearch("", {});
+        setHasSearched(false);
     }
 
     useEffect(() => {
@@ -134,10 +169,7 @@ export default function Home() {
                 setLoading(true);
                 setError(null);
 
-                const data = await fetchRecommendations({
-                    latitude: currentLocation?.lat,
-                    longitude: currentLocation?.lng,
-                });
+                const data = await fetchRecommendations(buildLocationParams());
                 if (!active) return;
                 const items = data.items ?? [];
                 setPlaces(items);
@@ -167,40 +199,20 @@ export default function Home() {
         setRecommendationPlaces,
     ]);
 
-    // Logic gốc: Tìm kiếm theo từ khóa
     async function handleSearch() {
         if (!canUseChat) return;
-        if (!query.trim()) {
+
+        const filterPayload = buildRecommendationFilterPayload(filters);
+        if (!query.trim() && Object.keys(filterPayload).length === 0) {
             await loadSuggestions();
             return;
         }
 
-        try {
-            setHasSearched(true);
-            setLoading(true);
-            setError(null);
+        await runRecommendationSearch(query, filterPayload);
+    }
 
-            const data = await fetchRecommendations({
-                query,
-                latitude: currentLocation?.lat,
-                longitude: currentLocation?.lng,
-            });
-            const items = data.items ?? [];
-            setPlaces(items);
-            setRecommendationPlaces(items);
-
-            // UX: Cuộn mượt mà xuống phần kết quả sau khi gọi API
-            if (resultsRef.current) {
-                resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-            }
-        } catch (err) {
-            console.error(err);
-            setError("Search failed. Please try again.");
-            setPlaces([]);
-            setRecommendationPlaces([]);
-        } finally {
-            setLoading(false);
-        }
+    async function handleFilterApply(filterPayload) {
+        await runRecommendationSearch(query, filterPayload);
     }
 
     return (
@@ -317,7 +329,12 @@ export default function Home() {
             >
                 <div className="section-soft row" style={{ gap: "16px", alignItems: "flex-start" }}>
                     <div style={{ flex: "1 1 300px" }}>
-                        <FilterPanel />
+                        <FilterPanel
+                            value={filters}
+                            onChange={setFilters}
+                            onApply={handleFilterApply}
+                            disabled={!canUseChat}
+                        />
                     </div>
                     <div style={{ flex: "1 1 300px" }}>
                         <RankingPanel />

@@ -1,4 +1,5 @@
 from math import asin, cos, radians, sin, sqrt
+from typing import Any
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -19,3 +20,36 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     )
     c = 2 * asin(sqrt(a))
     return earth_radius_km * c
+
+
+def get_distance_between_points(user_location: dict[str, Any], place_location: dict[str, Any]) -> float | None:
+    """Compute distance between two location dictionaries.
+
+    Input:
+    - user_location: dict with latitude/longitude or lat/lng.
+    - place_location: dict with latitude/longitude or lat/lng.
+
+    Output:
+    - distance in kilometers.
+    - None when either point is missing or not numeric.
+    """
+
+    def read_coordinate(payload: dict[str, Any], primary: str, fallback: str) -> float | None:
+        value = payload.get(primary)
+        if value is None:
+            value = payload.get(fallback)
+
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    lat1 = read_coordinate(user_location, "latitude", "lat")
+    lon1 = read_coordinate(user_location, "longitude", "lng")
+    lat2 = read_coordinate(place_location, "latitude", "lat")
+    lon2 = read_coordinate(place_location, "longitude", "lng")
+
+    if None in (lat1, lon1, lat2, lon2):
+        return None
+
+    return haversine_km(lat1, lon1, lat2, lon2)

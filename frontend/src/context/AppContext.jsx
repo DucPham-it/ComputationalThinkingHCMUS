@@ -18,6 +18,24 @@ const DEFAULT_APP_STATE = {
   recommendationPlaces: [],
 };
 
+function normalizeLocation(location) {
+  if (!location) {
+    return null;
+  }
+
+  const latitude = location.latitude ?? location.lat;
+  const longitude = location.longitude ?? location.lng;
+
+  if (latitude == null || longitude == null) {
+    return null;
+  }
+
+  return {
+    latitude,
+    longitude,
+  };
+}
+
 function readStoredAppState() {
   if (typeof window === "undefined") {
     return DEFAULT_APP_STATE;
@@ -32,7 +50,7 @@ function readStoredAppState() {
     const parsedState = JSON.parse(rawState);
     return {
       selectedPlace: parsedState.selectedPlace ?? null,
-      currentLocation: parsedState.currentLocation ?? null,
+      currentLocation: normalizeLocation(parsedState.currentLocation),
       recommendationPlaces: parsedState.recommendationPlaces ?? [],
     };
   } catch {

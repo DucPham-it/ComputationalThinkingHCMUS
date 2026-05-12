@@ -1,13 +1,22 @@
 """Very small smoke tests for placeholder recommendation logic."""
 
+from inspect import signature
+
+from app.api.routes.recommendations import get_recommendations
 from app.recommendation import recommender
 from app.recommendation.recommender import recommend_places
+from app.schemas.place_schema import RecommendationQuery
 
 
 
 def test_recommend_places_returns_list():
     items = recommend_places("quán ăn tối")
     assert isinstance(items, list)
+
+
+def test_recommendation_distance_defaults_to_unbounded():
+    assert signature(get_recommendations).parameters["max_distance_km"].default is None
+    assert RecommendationQuery().max_distance_km is None
 
 
 def test_recommend_places_returns_top_10(monkeypatch):

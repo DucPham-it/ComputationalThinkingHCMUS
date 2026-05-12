@@ -21,7 +21,7 @@ function formatRequestTitle(item) {
 }
 
 export default function Admin() {
-  const { user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [members, setMembers] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -33,6 +33,15 @@ export default function Admin() {
   const isApprovedAdmin = profile?.status === "approved" || user?.is_admin;
 
   async function loadAdminData(nextStatus = statusFilter) {
+    if (!isAuthenticated) {
+      setProfile(null);
+      setMembers([]);
+      setRequests([]);
+      setError("");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
@@ -56,7 +65,7 @@ export default function Admin() {
 
   useEffect(() => {
     loadAdminData(statusFilter);
-  }, [statusFilter]);
+  }, [isAuthenticated, statusFilter]);
 
   async function handleApply() {
     try {
@@ -103,6 +112,12 @@ export default function Admin() {
 
   if (loading) {
     return <LoadingSpinner message="Loading admin console..." />;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Error message="Sign in before opening the admin console." />
+    );
   }
 
   return (
@@ -207,4 +222,3 @@ export default function Admin() {
     </div>
   );
 }
-

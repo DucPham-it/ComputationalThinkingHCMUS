@@ -11,7 +11,11 @@ const mapContainerStyle = {
   borderRadius: "8px",
 };
 
-const defaultCenter = { lat: 10.9804, lng: 106.6519 };
+const defaultCenter = { latitude: 10.9804, longitude: 106.6519 };
+
+function resolveCoordinate(point, primaryKey, legacyKey) {
+  return point?.[primaryKey] ?? point?.[legacyKey];
+}
 
 function MapUpdater({ center, zoom }) {
   const map = useMap();
@@ -20,7 +24,14 @@ function MapUpdater({ center, zoom }) {
     if (!center) {
       return;
     }
-    map.setView([center.lat, center.lng], zoom, { animate: true });
+    map.setView(
+      [
+        resolveCoordinate(center, "latitude", "lat"),
+        resolveCoordinate(center, "longitude", "lng"),
+      ],
+      zoom,
+      { animate: true }
+    );
   }, [center, map, zoom]);
 
   return null;
@@ -33,8 +44,8 @@ function MapClickHandler({ onMapClick }) {
         return;
       }
       onMapClick({
-        lat: event.latlng.lat,
-        lng: event.latlng.lng,
+        latitude: event.latlng.lat,
+        longitude: event.latlng.lng,
       });
     },
   });
@@ -54,7 +65,10 @@ export default function MapContainer({
   return (
     <div className={`card ${mapContainerClassName}`} style={styles.card}>
       <LeafletMapContainer
-        center={[resolvedCenter.lat, resolvedCenter.lng]}
+        center={[
+          resolveCoordinate(resolvedCenter, "latitude", "lat"),
+          resolveCoordinate(resolvedCenter, "longitude", "lng"),
+        ]}
         zoom={zoom}
         scrollWheelZoom
         style={mapContainerStyle}

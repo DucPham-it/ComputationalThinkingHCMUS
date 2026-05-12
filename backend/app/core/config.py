@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
     osrm_base_url: str = "https://router.project-osrm.org"
     external_maps_user_agent: str = "computationalthinking-hcmus/1.0"
-    weather_api_key: str = ""
     resolve_point_local_match_radius_km: float = 0.35
     max_saved_places_per_user: int = 100
     max_picked_places_per_user: int = 60
@@ -37,7 +36,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DATABASE_SSL_REQUIRE", "DB_SSL_REQUIRE"),
     )
     jwt_secret: str = "change_this_secret"
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parents[2] / ".env"),

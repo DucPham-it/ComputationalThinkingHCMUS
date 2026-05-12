@@ -89,8 +89,8 @@ def _build_fallback_route(
         "duration_text": _format_duration(duration_seconds),
         "duration_seconds": duration_seconds,
         "path": [
-            {"lat": round(origin["latitude"], 6), "lng": round(origin["longitude"], 6)},
-            {"lat": round(destination["latitude"], 6), "lng": round(destination["longitude"], 6)},
+            {"latitude": round(origin["latitude"], 6), "longitude": round(origin["longitude"], 6)},
+            {"latitude": round(destination["latitude"], 6), "longitude": round(destination["longitude"], 6)},
         ],
         "steps": [
             {
@@ -173,8 +173,8 @@ def plan_route(
     coordinates_list = geometry.get("coordinates") or []
     path = [
         {
-            "lat": round(float(item[1]), 6),
-            "lng": round(float(item[0]), 6),
+            "latitude": round(float(item[1]), 6),
+            "longitude": round(float(item[0]), 6),
         }
         for item in coordinates_list
         if isinstance(item, list) and len(item) >= 2
@@ -198,8 +198,8 @@ def plan_route(
 
     if not path:
         path = [
-            {"lat": round(origin["latitude"], 6), "lng": round(origin["longitude"], 6)},
-            {"lat": round(destination["latitude"], 6), "lng": round(destination["longitude"], 6)},
+            {"latitude": round(origin["latitude"], 6), "longitude": round(origin["longitude"], 6)},
+            {"latitude": round(destination["latitude"], 6), "longitude": round(destination["longitude"], 6)},
         ]
 
     if not steps:

@@ -20,8 +20,8 @@ class RouteStep(BaseModel):
 
 
 class RoutePoint(BaseModel):
-    lat: float
-    lng: float
+    latitude: float
+    longitude: float
 
 
 class RouteResponse(BaseModel):

@@ -39,20 +39,20 @@ function buildTemporaryMapPlace(point, address = null) {
      * - TV6.
      *
      * Input:
-     * - point: Leaflet click point with lat/lng.
+     * - point: map click point with latitude/longitude.
      * - address: optional resolved address text.
      *
      * Output:
      * - temporary place-like object that can be shown on map and picked for route.
      * - flags mark it as local-only, not viewable, and not saveable.
      */
-    const fallbackAddress = address || `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+    const fallbackAddress = address || `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`;
     return {
-        id: `temp-map-${point.lat}-${point.lng}-${Date.now()}`,
+        id: `temp-map-${point.latitude}-${point.longitude}-${Date.now()}`,
         name: "Pinned point",
         address: fallbackAddress,
-        latitude: point.lat,
-        longitude: point.lng,
+        latitude: point.latitude,
+        longitude: point.longitude,
         photo_url: null,
         rating: null,
         review_count: 0,
@@ -62,31 +62,6 @@ function buildTemporaryMapPlace(point, address = null) {
         _canView: false,
         _canSave: false,
     };
-}
-
-function sanitizePickedPlace(place) {
-    /**
-     * Owner:
-     * - TV6.
-     *
-     * Input:
-     * - place: map marker payload with temporary UI-only flags.
-     *
-     * Output:
-     * - clean place object safe to store in AppContext.selectedPlace.
-     */
-    if (!place) {
-        return place;
-    }
-
-    const {
-        _isTemporaryMapSelection,
-        _isLocalOnly,
-        _canView,
-        _canSave,
-        ...cleanPlace
-    } = place;
-    return cleanPlace;
 }
 
 function getDatabasePlaceId(place) {
@@ -117,7 +92,7 @@ export function buildRouteDestinationFromMapPick(place) {
      *   - id: database place id or temporary id
      *   - name: display name
      *   - address: address text
-     *   - latitude/longitude or lat/lng
+     *   - latitude/longitude
      *   - photo_url, primary_type, can_view, can_save when available
      *
      * Output:
@@ -129,6 +104,29 @@ export function buildRouteDestinationFromMapPick(place) {
      * - Database-backed place should call recordPlacePick(place.id).
      * - Temporary map point should still navigate to Route, but cannot be saved/viewed.
      */
+    const latitude = place?.latitude ?? place?.lat;
+    const longitude = place?.longitude ?? place?.lng;
+
+    if (latitude == null || longitude == null) {
+        throw new Error("Missing coordinates");
+    }
+
+    const databasePlaceId = getDatabasePlaceId(place);
+    const isTemporary = place?._isTemporaryMapSelection === true;
+
+    return {
+        place_id: databasePlaceId,
+        id: place.id,
+        name: place.name || "Custom destination",
+        address: place.address || null,
+        latitude,
+        longitude,
+        photo_url: place.photo_url || null,
+        primary_type: place.primary_type || place.category || null,
+        source: isTemporary ? "map_click" : "map_marker",
+        can_view: place.can_view ?? place._canView ?? databasePlaceId !== null,
+        can_save: place.can_save ?? place._canSave ?? databasePlaceId !== null,
+    };
 }
 
 export default function MapView({ places = [] }) {
@@ -140,7 +138,7 @@ export default function MapView({ places = [] }) {
         setRecommendationPlaces,
         setSelectedPlace: setPickedPlace,
     } = useApp();
-    const [mapCenter, setMapCenter] = useState({ lat: 10.7769, lng: 106.7009 });
+    const [mapCenter, setMapCenter] = useState({ latitude: 10.7769, longitude: 106.7009 });
     const [selectedPlaceId, setSelectedPlaceId] = useState(null);
     const [requestTargetPlace, setRequestTargetPlace] = useState(null);
     const mapPlaces = places.length ? places : recommendationPlaces;
@@ -200,12 +198,12 @@ export default function MapView({ places = [] }) {
 
     // when select a place
     const handlePlaceSelect = (place) => {
-        const lat = place.lat ?? place.latitude;
-        const lng = place.lng ?? place.longitude;
+        const latitude = place.latitude ?? place.lat;
+        const longitude = place.longitude ?? place.lng;
 
         setSelectedPlaceId(place.id);
-        if (lat != null && lng != null) {
-            setMapCenter({ lat, lng });
+        if (latitude != null && longitude != null) {
+            setMapCenter({ latitude, longitude });
         }
     };
 
@@ -232,6 +230,14 @@ export default function MapView({ places = [] }) {
     }
 
     function handlePickPlace(place) {
+        let destination;
+        try {
+            destination = buildRouteDestinationFromMapPick(place);
+        } catch (error) {
+            alert("This marker is missing coordinates. Cannot navigate to route.");
+            return;
+        }
+
         const databasePlaceId = getDatabasePlaceId(place);
         if (databasePlaceId !== null) {
             recordPlacePick(databasePlaceId).catch((error) => {
@@ -240,7 +246,7 @@ export default function MapView({ places = [] }) {
         }
 
         confirmPlace(place);
-        setPickedPlace(sanitizePickedPlace(place));
+        setPickedPlace(destination);
         navigate("/route");
     }
 
@@ -251,8 +257,8 @@ export default function MapView({ places = [] }) {
     async function handleMapClick(point) {
         try {
             const resolvedPlace = await resolvePlaceFromCoordinates({
-                latitude: point.lat,
-                longitude: point.lng,
+                latitude: point.latitude,
+                longitude: point.longitude,
             });
             const alreadyListed = mapPlaces.some((place) => place.id === resolvedPlace.id);
             const previewPlace = {
@@ -266,8 +272,8 @@ export default function MapView({ places = [] }) {
                 typeof resolvedPlace.longitude === "number"
             ) {
                 setMapCenter({
-                    lat: resolvedPlace.latitude,
-                    lng: resolvedPlace.longitude,
+                    latitude: resolvedPlace.latitude,
+                    longitude: resolvedPlace.longitude,
                 });
             }
         } catch (error) {
@@ -299,7 +305,7 @@ export default function MapView({ places = [] }) {
             >
                 {currentLocation ? (
                     <CircleMarker
-                        center={[currentLocation.lat, currentLocation.lng]}
+                        center={[currentLocation.latitude, currentLocation.longitude]}
                         radius={userMarkerStyle.radius}
                         pathOptions={userMarkerStyle.pathOptions}
                     >

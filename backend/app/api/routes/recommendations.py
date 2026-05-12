@@ -58,7 +58,7 @@ def get_recommendations(
     budget_level: str | None = None,
     companion_type: str | None = None,
     start_time: str | None = None,
-    max_distance_km: float | None = 5,
+    max_distance_km: float | None = None,
     require_open_now: bool = False,
     min_rating: float | None = None,
     latitude: float | None = None,
@@ -77,7 +77,9 @@ def get_recommendations(
     - budget_level: low/medium/high filter
     - companion_type: solo/couple/family/friends preference
     - start_time: intended visit time or time slot
-    - max_distance_km: maximum distance radius
+    - max_distance_km: optional maximum distance radius. When omitted, default
+      suggestions are ranked from the full candidate set instead of being
+      limited to 5km.
     - require_open_now: when true, only return currently-open candidates
     - min_rating: minimum rating 0..5
     - latitude/longitude: GPS or map context
@@ -114,7 +116,7 @@ def get_recommendations(
             "budget_level": budget_level,
             "companion_type": companion_type,
             "start_time": start_time,
-            "max_distance_km": max_distance_km if max_distance_km != 5 else None,
+            "max_distance_km": max_distance_km,
             "require_open_now": require_open_now,
             "min_rating": min_rating,
         },

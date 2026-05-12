@@ -11,7 +11,10 @@ export default function RouteMap({ path = [] }) {
 
   return (
     <Polyline
-      positions={path.map((point) => [point.lat, point.lng])}
+      positions={path.map((point) => [
+        point.latitude ?? point.lat,
+        point.longitude ?? point.lng,
+      ])}
       pathOptions={{
         color: "#2563eb",
         weight: 5,

@@ -35,13 +35,13 @@ function buildPointMarker(color) {
 }
 
 function buildTemporaryMapPlace(point, address = null) {
-  const fallbackAddress = address || `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+  const fallbackAddress = address || formatCoordinatePoint(point);
   return {
-    id: `temp-route-${point.lat}-${point.lng}-${Date.now()}`,
+    id: `temp-route-${point.latitude}-${point.longitude}-${Date.now()}`,
     name: "Pinned point",
     address: fallbackAddress,
-    latitude: point.lat,
-    longitude: point.lng,
+    latitude: point.latitude,
+    longitude: point.longitude,
     photo_url: null,
     rating: null,
     review_count: 0,
@@ -51,6 +51,29 @@ function buildTemporaryMapPlace(point, address = null) {
     _canView: false,
     _canSave: false,
   };
+}
+
+function coordinatePointToRequest(point) {
+  return `${point.latitude},${point.longitude}`;
+}
+
+function formatCoordinatePoint(point) {
+  return `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`;
+}
+
+function coordinatePointFromPlace(place) {
+  if (
+    place &&
+    typeof place.latitude === "number" &&
+    typeof place.longitude === "number"
+  ) {
+    return {
+      latitude: place.latitude,
+      longitude: place.longitude,
+    };
+  }
+
+  return null;
 }
 
 function sanitizePickedPlace(place) {
@@ -105,8 +128,8 @@ export default function RouteView() {
       typeof selectedPlace.longitude === "number"
     ) {
       setDestinationPoint({
-        lat: selectedPlace.latitude,
-        lng: selectedPlace.longitude,
+        latitude: selectedPlace.latitude,
+        longitude: selectedPlace.longitude,
       });
     }
   }, [selectedPlace]);
@@ -179,32 +202,32 @@ export default function RouteView() {
       typeof selectedPlace.latitude === "number" &&
       typeof selectedPlace.longitude === "number"
     ) {
-      return { lat: selectedPlace.latitude, lng: selectedPlace.longitude };
+      return { latitude: selectedPlace.latitude, longitude: selectedPlace.longitude };
     }
 
-    return { lat: 10.7769, lng: 106.7009 };
+    return { latitude: 10.7769, longitude: 106.7009 };
   }, [currentLocation, destinationPoint, originMode, originPoint, selectedPlace, selectionTarget]);
 
   const originForRequest =
     originMode === "gps" && currentLocation
-      ? `${currentLocation.lat},${currentLocation.lng}`
+      ? coordinatePointToRequest(currentLocation)
       : originPoint
-      ? `${originPoint.lat},${originPoint.lng}`
+      ? coordinatePointToRequest(originPoint)
       : originInput.trim();
 
   const destinationForRequest = destinationPoint
-    ? `${destinationPoint.lat},${destinationPoint.lng}`
+    ? coordinatePointToRequest(destinationPoint)
     : destinationInput.trim();
 
   const startSummary =
     originMode === "gps" && currentLocation
-      ? `${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}`
+      ? formatCoordinatePoint(currentLocation)
       : originPoint
-      ? `${originPoint.lat.toFixed(5)}, ${originPoint.lng.toFixed(5)}`
+      ? formatCoordinatePoint(originPoint)
       : originInput || "Pick a point on the map or type it manually";
 
   const destinationSummary = destinationPoint
-    ? `${destinationPoint.lat.toFixed(5)}, ${destinationPoint.lng.toFixed(5)}`
+    ? formatCoordinatePoint(destinationPoint)
     : destinationInput || selectedPlace?.name || "Pick a place or click a destination on the map";
 
   if (!canUseRoute) {
@@ -233,8 +256,8 @@ export default function RouteView() {
     setRouteError("");
     try {
       const resolvedPlace = await resolvePlaceFromCoordinates({
-        latitude: point.lat,
-        longitude: point.lng,
+        latitude: point.latitude,
+        longitude: point.longitude,
       });
       const alreadyListed = recommendationPlaces.some((place) => place.id === resolvedPlace.id);
       const previewPlace = {
@@ -291,10 +314,7 @@ export default function RouteView() {
 
   async function handleConfirmMapSelection(place) {
     setSelectedPopupPlaceId(place.id);
-    const resolvedPoint =
-      typeof place.latitude === "number" && typeof place.longitude === "number"
-        ? { lat: place.latitude, lng: place.longitude }
-        : null;
+    const resolvedPoint = coordinatePointFromPlace(place);
 
     if (selectionTarget === "origin") {
       setOriginMode("manual");
@@ -302,7 +322,7 @@ export default function RouteView() {
       setOriginInput(
         place.address ||
           place.name ||
-          (resolvedPoint ? `${resolvedPoint.lat},${resolvedPoint.lng}` : "")
+          (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
       );
       setLocationNotice("Start point confirmed from the map.");
       clearPreviewSelection(place);
@@ -320,7 +340,7 @@ export default function RouteView() {
     setDestinationInput(
       place.address ||
         place.name ||
-        (resolvedPoint ? `${resolvedPoint.lat},${resolvedPoint.lng}` : "")
+        (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
     );
     setLocationNotice("Destination confirmed from the map.");
     clearPreviewSelection(place);
@@ -473,7 +493,7 @@ export default function RouteView() {
                 <strong style={{ display: "block", marginBottom: "6px" }}>Current GPS</strong>
                 <span style={{ color: "var(--color-text-soft)" }}>
                   {currentLocation
-                    ? `${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}`
+                    ? formatCoordinatePoint(currentLocation)
                     : "Waiting for browser location..."}
                 </span>
               </div>
@@ -627,7 +647,7 @@ export default function RouteView() {
 
           {originMode === "gps" && currentLocation ? (
             <CircleMarker
-              center={[currentLocation.lat, currentLocation.lng]}
+              center={[currentLocation.latitude, currentLocation.longitude]}
               radius={gpsMarkerIcon.radius}
               pathOptions={gpsMarkerIcon.pathOptions}
             >
@@ -637,7 +657,7 @@ export default function RouteView() {
 
           {originMode !== "gps" && originPoint ? (
             <CircleMarker
-              center={[originPoint.lat, originPoint.lng]}
+              center={[originPoint.latitude, originPoint.longitude]}
               radius={originMarkerIcon.radius}
               pathOptions={originMarkerIcon.pathOptions}
             >
@@ -647,7 +667,7 @@ export default function RouteView() {
 
           {destinationPoint ? (
             <CircleMarker
-              center={[destinationPoint.lat, destinationPoint.lng]}
+              center={[destinationPoint.latitude, destinationPoint.longitude]}
               radius={destinationMarkerIcon.radius}
               pathOptions={destinationMarkerIcon.pathOptions}
             >

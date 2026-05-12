@@ -67,10 +67,10 @@ export default function MarkerList({
   return (
     <>
       {places.map((place) => {
-        const lat = place.lat ?? place.latitude;
-        const lng = place.lng ?? place.longitude;
+        const latitude = place.latitude ?? place.lat;
+        const longitude = place.longitude ?? place.lng;
 
-        if (lat == null || lng == null) {
+        if (latitude == null || longitude == null) {
           return null;
         }
 
@@ -80,7 +80,7 @@ export default function MarkerList({
         return (
           <CircleMarker
             key={place.id}
-            center={[lat, lng]}
+            center={[latitude, longitude]}
             radius={markerAppearance.radius}
             pathOptions={markerAppearance.pathOptions}
             eventHandlers={{

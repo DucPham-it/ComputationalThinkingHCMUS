@@ -79,11 +79,11 @@ ENTERTAINMENT_LABELS: dict[str, str] = {
 BUDGET_PATTERNS: dict[str, tuple[str, ...]] = {
     "low": ("rẻ", "re", "cheap", "tiết kiệm", "tiet kiem", "bình dân", "binh dan"),
     "medium": ("vừa túi tiền", "vua tui tien", "tam tam", "average"),
-    "high": ("sang", "luxury", "cao cấp", "cao cap"),
+    "high": ("sang", "luxury", "cao cấp", "cao cap", "premium", "expensive", "high-end"),
 }
 
 COMPANION_PATTERNS: dict[str, tuple[str, ...]] = {
-    "couple": ("2 người", "hai người", "couple", "hẹn hò", "hen ho"),
+    "couple": ("2 người", "hai người", "couple", "hẹn hò", "hen ho", "cặp đôi", "cap doi"),
     "family": ("gia đình", "gia dinh", "family"),
     "friends": ("bạn bè", "ban be", "friends", "team"),
     "solo": ("một mình", "mot minh", "solo", "alone"),
@@ -220,7 +220,7 @@ def parse_search_text(query: str) -> dict:
       - external_query: terms reserved for external search fallback
       - content_terms: remaining meaningful tokens after intent extraction
 
-    TODO TV3:
+    Maintenance:
     - Keep this function stable for existing code.
     - Move richer parsing into parse_recommendation_language_contract.
     """
@@ -273,7 +273,7 @@ def parse_search_text(query: str) -> dict:
 
 
 def parse_recommendation_language_contract(query: str) -> dict:
-    """TODO TV3: full NLP contract for natural-language recommendation input.
+    """Parse the full NLP contract for natural-language recommendation input.
 
     Owner:
     - TV3.
@@ -303,13 +303,134 @@ def parse_recommendation_language_contract(query: str) -> dict:
 
     Implementation note:
     - Keep parse_search_text backward-compatible.
-    - This function is intentionally empty so AI/NLP owner can implement and test it.
+    - Keep output values aligned with backend filter contracts.
     """
-    pass
+    if not query or not query.strip():
+        return {
+            "intent": "unknown",
+            "entertainment_type": None,
+            "budget_level": None,
+            "companion_type": None,
+            "time_slot": None,
+            "location_hint": None,
+            "distance_hint_km": None,
+            "require_open_now": False,
+            "min_rating": None,
+            "keywords": [],
+            "confidence": 0.0,
+            "missing_fields": [],
+        }
+
+    base = parse_search_text(query)
+    text = base["normalized_query"]
+
+    def contains_phrase(*phrases: str) -> bool:
+        return any(
+            re.search(rf"(?<!\w){re.escape(_normalize_text(phrase))}(?!\w)", text) is not None
+            for phrase in phrases
+        )
+
+    def is_negated(keyword: str) -> bool:
+        normalized_keyword = _normalize_text(keyword)
+        negation_phrases = (
+            f"khong {normalized_keyword}",
+            f"khong can {normalized_keyword}",
+            f"khong muon {normalized_keyword}",
+            f"khong thich {normalized_keyword}",
+        )
+        return any(phrase in text for phrase in negation_phrases)
+
+    distance_hint_km: float | None = None
+    distance_match = re.search(r"(\d+(?:\.\d+)?)\s*km", text)
+    if distance_match:
+        distance_hint_km = float(distance_match.group(1))
+    elif contains_phrase("gan day", "gan toi", "gan day", "nearby", "near me") and not is_negated("gan"):
+        distance_hint_km = 3.0
+    elif contains_phrase("rat gan", "gan") and not is_negated("gan"):
+        distance_hint_km = 5.0
+
+    min_rating: float | None = None
+    rating_match = re.search(r"(\d(?:\.\d)?)\s*sao", text)
+    if rating_match:
+        min_rating = min(5.0, max(0.0, float(rating_match.group(1))))
+
+    require_open_now = contains_phrase(
+        "dang mo",
+        "mo cua",
+        "con mo",
+        "open now",
+        "available now",
+    )
+
+    location_hint = None
+    location_match = re.search(r"\b(?:quan|district)\s*\d+\b", text)
+    if location_match:
+        location_hint = location_match.group(0)
+
+    budget_level = base.get("budget_level")
+    if is_negated("re") or is_negated("dat") or is_negated("cao cap"):
+        budget_level = None
+
+    keywords = [
+        token
+        for token in base.get("content_terms", [])
+        if token not in {"khong", "can", "muon", "gan", "xa", "sao", "km"}
+    ]
+
+    signal_count = sum(
+        1
+        for value in (
+            base.get("entertainment_type"),
+            budget_level,
+            base.get("companion_type"),
+            base.get("time_slot"),
+            distance_hint_km,
+            require_open_now,
+            min_rating,
+            location_hint,
+            keywords,
+        )
+        if value
+    )
+    confidence = round(min(1.0, 0.25 + signal_count * 0.12), 2)
+
+    if base.get("entertainment_type") == "restaurant":
+        intent = "find_food"
+    elif base.get("entertainment_type"):
+        intent = "find_activity"
+    elif contains_phrase("tim", "goi y", "suggest", "recommend"):
+        intent = "recommend_place"
+    elif keywords:
+        intent = "recommend_place"
+    else:
+        intent = "unknown"
+
+    missing_fields: list[str] = []
+    if not base.get("entertainment_type"):
+        missing_fields.append("entertainment_type")
+    if signal_count >= 2 and distance_hint_km is None:
+        missing_fields.append("distance")
+    if signal_count >= 2 and base.get("time_slot") is None:
+        missing_fields.append("time")
+
+    return {
+        "intent": intent,
+        "entertainment_type": base.get("entertainment_type"),
+        "budget_level": budget_level,
+        "companion_type": base.get("companion_type"),
+        "time_slot": base.get("time_slot"),
+        "location_hint": location_hint,
+        "distance_hint_km": distance_hint_km,
+        "require_open_now": require_open_now,
+        "min_rating": min_rating,
+        "keywords": _unique(keywords),
+        "confidence": confidence,
+        "missing_fields": missing_fields,
+    }
 
 
 def extract_filter_fields_from_text(query: str) -> dict:
-    """TODO TV3: extract fields that should merge with explicit UI filters.
+    """Extract fields that should merge with explicit UI filters.
 
     Owner:
     - TV3 owns extraction.
@@ -331,7 +452,25 @@ def extract_filter_fields_from_text(query: str) -> dict:
       - companion_type
       - start_time or time_slot
 
-    Conflict rule:
+    Merge rule:
     - UI filters win over NLP fields when both are present.
     """
-    pass
+    parsed = parse_recommendation_language_contract(query)
+    fields = {
+        "max_distance_km": parsed.get("distance_hint_km"),
+        "min_rating": parsed.get("min_rating"),
+        "budget_level": parsed.get("budget_level"),
+        "preferred_types": [parsed["entertainment_type"]] if parsed.get("entertainment_type") else None,
+        "require_open_now": parsed.get("require_open_now"),
+        "companion_type": parsed.get("companion_type"),
+        "time_slot": parsed.get("time_slot"),
+    }
+    extracted_fields: dict[str, object] = {}
+    for key, value in fields.items():
+        if value is None or value is False:
+            continue
+        if value == "" or value == []:
+            continue
+        extracted_fields[key] = value
+
+    return extracted_fields

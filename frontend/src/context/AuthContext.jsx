@@ -1,4 +1,5 @@
 import { createContext, useEffect, useMemo, useState } from "react";
+import { AUTH_UNAUTHORIZED_EVENT } from "../services/api";
 
 /**
  * Authentication state container.
@@ -48,6 +49,21 @@ export function AuthProvider({ children }) {
 
     window.localStorage.removeItem(USER_STORAGE_KEY);
   }, [user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handleUnauthorized() {
+      setUser(null);
+    }
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => {
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    };
+  }, []);
 
   function logout() {
     if (typeof window !== "undefined") {

@@ -14,6 +14,77 @@ import api from "./api";
  * - No map-pick or route side effects live in this file.
  */
 
+export function normalizeBudgetLevel(value) {
+  /**
+   * Input:
+   * - value: UI/NLP budget value. Accepts low/medium/high plus aliases
+   *   cheap/premium.
+   *
+   * Output:
+   * - backend canonical budget value: low, medium, high, or undefined.
+   */
+  const normalized = String(value || "").trim().toLowerCase();
+  const aliases = {
+    cheap: "low",
+    budget: "low",
+    premium: "high",
+    expensive: "high",
+    luxury: "high",
+  };
+  const canonical = aliases[normalized] || normalized;
+  return ["low", "medium", "high"].includes(canonical) ? canonical : undefined;
+}
+
+export function buildRecommendationFilterPayload(formValues = {}) {
+  /**
+   * Owner:
+   * - TV2.
+   *
+   * Input:
+   * - formValues: controlled filter object:
+   *   { entertainment_type, budget_level, companion_type, start_time,
+   *     max_distance_km, require_open_now, min_rating }
+   *
+   * Output:
+   * - params accepted by fetchRecommendations.
+   * - empty values are omitted.
+   * - budget_level is normalized to low/medium/high.
+   */
+  const payload = {};
+
+  if (formValues.entertainment_type) {
+    payload.entertainment_type = formValues.entertainment_type;
+  }
+
+  const budgetLevel = normalizeBudgetLevel(formValues.budget_level);
+  if (budgetLevel) {
+    payload.budget_level = budgetLevel;
+  }
+
+  if (formValues.companion_type) {
+    payload.companion_type = formValues.companion_type;
+  }
+  if (formValues.start_time) {
+    payload.start_time = formValues.start_time;
+  }
+
+  const maxDistanceKm = Number(formValues.max_distance_km);
+  if (Number.isFinite(maxDistanceKm) && maxDistanceKm > 0) {
+    payload.max_distance_km = maxDistanceKm;
+  }
+
+  if (formValues.require_open_now === true) {
+    payload.require_open_now = true;
+  }
+
+  const minRating = Number(formValues.min_rating);
+  if (Number.isFinite(minRating) && minRating > 0) {
+    payload.min_rating = minRating;
+  }
+
+  return payload;
+}
+
 export async function fetchRecommendations(params) {
   /**
    * Owner:

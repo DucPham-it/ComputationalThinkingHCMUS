@@ -171,13 +171,29 @@ def recommend_places(
     filter_plan = build_filter_plan(nlp_filters, ui_filters)
     resolved_allowed_types = list(filter_plan.get("allowed_types") or [])
 
+    has_query = bool(query.strip())
+    has_structured_filters = any(key != "source_map" for key in filter_plan)
+    candidate_limit = 240 if has_query or has_structured_filters else 60
+
     places = search_places(
         query=parsed.get("local_query") or query,
         external_query="",
         latitude=latitude,
         longitude=longitude,
         db=db,
+        limit=candidate_limit,
     )
+
+    if has_query or has_structured_filters:
+        broad_database_places = search_places(
+            query="",
+            external_query="",
+            latitude=latitude,
+            longitude=longitude,
+            db=db,
+            limit=candidate_limit,
+        )
+        places = _dedupe_places(places + broad_database_places)
     recent_queries: list[str] = []
     saved_ids: list[int] = []
     picked_ids: list[int] = []
@@ -273,12 +289,14 @@ def build_recommendation_context(
 
     latitude = ui_filters.get("latitude")
     longitude = ui_filters.get("longitude")
+    context_has_filters = any(key != "source_map" for key in effective_filters)
     candidates = search_places(
         query=parsed.get("local_query") or query,
         external_query="",
         latitude=latitude,
         longitude=longitude,
         db=db,
+        limit=240 if query.strip() or context_has_filters else 60,
     )
 
     favorite_repo = FavoriteRepository(db)

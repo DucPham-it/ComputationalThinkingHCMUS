@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 
 from sqlalchemy import text
@@ -53,6 +54,73 @@ PLACE_FROM_JOIN = """
     LEFT JOIN place_review_stats AS prs ON prs.place_id = p.id
 """
 
+SEARCH_STOP_WORDS = {
+    "cho",
+    "toi",
+    "minh",
+    "tim",
+    "kiem",
+    "gan",
+    "day",
+    "quanh",
+    "khu",
+    "vuc",
+    "di",
+    "choi",
+    "noi",
+    "nao",
+    "voi",
+    "trong",
+    "duoi",
+    "tren",
+    "sao",
+    "km",
+    "near",
+    "around",
+    "place",
+    "places",
+}
+
+SEARCH_CATEGORY_ALIASES = {
+    "restaurant": (
+        "restaurant",
+        "food",
+        "nha hang",
+        "nhà hàng",
+        "quan an",
+        "quán ăn",
+        "đồ ăn",
+        "do an",
+    ),
+    "cafe": (
+        "cafe",
+        "coffee",
+        "ca phe",
+        "cà phê",
+        "quán cà phê",
+        "quan ca phe",
+    ),
+    "movie_theater": (
+        "movie",
+        "cinema",
+        "rap",
+        "rạp",
+        "phim",
+        "rạp chiếu phim",
+        "rap chieu phim",
+    ),
+    "park": ("park", "cong vien", "công viên"),
+    "mall": (
+        "mall",
+        "shopping",
+        "shopping mall",
+        "trung tam thuong mai",
+        "trung tâm thương mại",
+    ),
+    "museum": ("museum", "bao tang", "bảo tàng"),
+    "hotel": ("hotel", "khach san", "khách sạn"),
+}
+
 
 def _loads_json(raw_value, *, default):
     if not raw_value:
@@ -60,9 +128,54 @@ def _loads_json(raw_value, *, default):
     if isinstance(raw_value, (dict, list)):
         return raw_value
     try:
-        return json.loads(raw_value)
+        loaded_value = json.loads(raw_value)
     except (TypeError, ValueError):
         return default
+    return loaded_value if loaded_value is not None else default
+
+
+def _unique_texts(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        normalized = item.strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
+
+
+def _expand_search_patterns(keyword: str) -> list[str]:
+    """Build database search patterns from free text and category aliases.
+
+    Input:
+    - keyword: raw or NLP-normalized search text, for example "nha hang re"
+      or "cafe gan day".
+
+    Output:
+    - list of lowercase text patterns used with SQL LIKE.
+    - includes category aliases so accentless NLP text can still match
+      accented catalog values such as "Nhà hàng" or "Cà phê".
+    """
+    normalized_keyword = keyword.strip().lower()
+    if not normalized_keyword:
+        return []
+
+    patterns = [normalized_keyword]
+    tokens = [
+        token
+        for token in re.split(r"[^\w]+", normalized_keyword, flags=re.UNICODE)
+        if len(token) >= 2 and token not in SEARCH_STOP_WORDS and not token.isdigit()
+    ]
+    patterns.extend(tokens)
+
+    compact_keyword = f" {normalized_keyword} "
+    for aliases in SEARCH_CATEGORY_ALIASES.values():
+        if any(f" {alias} " in compact_keyword or alias in normalized_keyword for alias in aliases):
+            patterns.extend(aliases)
+
+    return _unique_texts(patterns)[:16]
 
 
 def _normalize_primary_type(category: str | None) -> str | None:
@@ -230,28 +343,71 @@ class PlaceRepository:
         return self._to_place(row) if row else None
 
     def search_local_places(self, keyword: str = "", limit: int = 50) -> list[Place]:
-        normalized_keyword = f"%{keyword.strip().lower()}%"
+        safe_limit = max(1, int(limit or 50))
+        search_patterns = _expand_search_patterns(keyword)
+
+        if not search_patterns:
+            rows = (
+                self._select_mappings(
+                    f"""
+                        SELECT {PLACE_SELECT_COLUMNS}
+                        FROM {PLACE_FROM_JOIN}
+                        WHERE COALESCE(p.status, 'active') <> 'deleted'
+                        ORDER BY
+                            CASE WHEN prs.average_rating IS NULL THEN 1 ELSE 0 END,
+                            COALESCE(prs.average_rating, 0) DESC,
+                            COALESCE(prs.review_count, 0) DESC,
+                            p.id ASC
+                        LIMIT :limit
+                        """,
+                    {"limit": safe_limit},
+                )
+                .all()
+            )
+            return [self._to_place(row) for row in rows]
+
+        params: dict[str, object] = {"limit": safe_limit}
+        match_conditions: list[str] = []
+        score_parts: list[str] = []
+
+        for index, pattern in enumerate(search_patterns):
+            param_name = f"pattern_{index}"
+            params[param_name] = f"%{pattern}%"
+            match_conditions.append(
+                f"""
+                LOWER(p.title) LIKE :{param_name}
+                OR LOWER(COALESCE(p.category, '')) LIKE :{param_name}
+                OR LOWER(p.address_text) LIKE :{param_name}
+                OR LOWER(COALESCE(p.descriptions, '')) LIKE :{param_name}
+                """
+            )
+            score_parts.extend(
+                [
+                    f"CASE WHEN LOWER(p.title) LIKE :{param_name} THEN 4 ELSE 0 END",
+                    f"CASE WHEN LOWER(COALESCE(p.category, '')) LIKE :{param_name} THEN 3 ELSE 0 END",
+                    f"CASE WHEN LOWER(p.address_text) LIKE :{param_name} THEN 2 ELSE 0 END",
+                    f"CASE WHEN LOWER(COALESCE(p.descriptions, '')) LIKE :{param_name} THEN 1 ELSE 0 END",
+                ]
+            )
+
+        search_score_sql = " + ".join(score_parts)
+        where_sql = " OR ".join(f"({condition})" for condition in match_conditions)
         rows = (
             self._select_mappings(
                 f"""
-                    SELECT {PLACE_SELECT_COLUMNS}
+                    SELECT {PLACE_SELECT_COLUMNS}, ({search_score_sql}) AS search_score
                     FROM {PLACE_FROM_JOIN}
                     WHERE COALESCE(p.status, 'active') <> 'deleted'
-                      AND (
-                        :keyword = '%%'
-                        OR LOWER(p.title) LIKE :keyword
-                        OR LOWER(p.category) LIKE :keyword
-                        OR LOWER(p.address_text) LIKE :keyword
-                        OR LOWER(COALESCE(p.descriptions, '')) LIKE :keyword
-                      )
+                      AND ({where_sql})
                     ORDER BY
+                        search_score DESC,
                         CASE WHEN prs.average_rating IS NULL THEN 1 ELSE 0 END,
                         COALESCE(prs.average_rating, 0) DESC,
                         COALESCE(prs.review_count, 0) DESC,
                         p.id ASC
                     LIMIT :limit
                     """,
-                {"keyword": normalized_keyword, "limit": limit},
+                params,
             )
             .all()
         )

@@ -108,6 +108,7 @@ STOP_WORDS = {
     "tại",
     "gan",
     "gần",
+    "day",
     "quanh",
     "khu",
     "vuc",

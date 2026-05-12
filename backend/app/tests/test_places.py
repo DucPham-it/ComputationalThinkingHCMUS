@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.api.routes.places import get_place_detail
+from app.repositories.place_repo import PlaceRepository
 
 
 def build_test_session():
@@ -156,5 +157,68 @@ def test_get_place_detail_reads_local_place_data():
     assert response.rating == 4.8
     assert response.price_range == "₫₫"
     assert response.images == ["https://example.com/pizza.jpg"]
+
+    db.close()
+
+
+def test_search_local_places_matches_tokens_and_category_aliases():
+    db = build_test_session()
+    db.execute(
+        text(
+            """
+            INSERT INTO places (
+                title,
+                category,
+                address_text,
+                open_hours_json,
+                popular_times_json,
+                about_json,
+                status
+            )
+            VALUES (
+                'Com Tam Corner',
+                'Nhà hàng Việt Nam',
+                '456 Test Street',
+                '{}',
+                '{}',
+                '[]',
+                'active'
+            )
+            """
+        )
+    )
+    db.execute(
+        text(
+            """
+            INSERT INTO places (
+                title,
+                category,
+                address_text,
+                open_hours_json,
+                popular_times_json,
+                about_json,
+                status
+            )
+            VALUES (
+                'Quiet Coffee',
+                'Quán cà phê',
+                '789 Test Street',
+                '{}',
+                '{}',
+                '[]',
+                'active'
+            )
+            """
+        )
+    )
+    db.commit()
+
+    repo = PlaceRepository(db)
+
+    restaurant_results = repo.search_local_places("nha hang gia dinh", limit=10)
+    cafe_results = repo.search_local_places("quiet cafe gan day", limit=10)
+
+    assert [place.name for place in restaurant_results] == ["Com Tam Corner"]
+    assert [place.name for place in cafe_results] == ["Quiet Coffee"]
 
     db.close()

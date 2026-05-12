@@ -71,6 +71,7 @@ def search_places(
     latitude: float | None = None,
     longitude: float | None = None,
     db: Session | None = None,
+    limit: int = 60,
 ) -> list[dict[str, Any]]:
     del external_query
 
@@ -78,7 +79,7 @@ def search_places(
         return []
 
     place_repo = PlaceRepository(db)
-    local_places = place_repo.search_local_places(query, limit=60)
+    local_places = place_repo.search_local_places(query, limit=limit)
     return [
         _to_result_item(place, latitude=latitude, longitude=longitude)
         for place in local_places

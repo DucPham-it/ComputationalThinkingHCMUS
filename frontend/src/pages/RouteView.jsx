@@ -230,6 +230,17 @@ export default function RouteView() {
     ? formatCoordinatePoint(destinationPoint)
     : destinationInput || selectedPlace?.name || "Pick a place or click a destination on the map";
 
+  const routeFitBoundsPoints = useMemo(
+    () =>
+      [
+        ...(recommendationPlaces || []),
+        originMode === "gps" ? currentLocation : originPoint,
+        destinationPoint,
+        ...(routeInfo?.path || []),
+      ].filter(Boolean),
+    [currentLocation, destinationPoint, originMode, originPoint, recommendationPlaces, routeInfo]
+  );
+
   if (!canUseRoute) {
     return (
       <div className="card" style={{ display: "grid", gap: "12px", marginTop: "24px" }}>
@@ -618,7 +629,12 @@ export default function RouteView() {
         title="Interactive Route Map"
         subtitle="Browse markers freely. Nothing becomes start or destination until you confirm it with Pick on map."
       >
-        <MapContainer center={mapCenter} zoom={13} onMapClick={handleMapClick}>
+        <MapContainer
+          center={mapCenter}
+          zoom={13}
+          onMapClick={handleMapClick}
+          fitBoundsPoints={routeFitBoundsPoints}
+        >
           {recommendationPlaces?.length ? (
             <MarkerList
               places={recommendationPlaces}

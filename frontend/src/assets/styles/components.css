@@ -45,6 +45,148 @@
     transform: translateY(-1px);
 }
 
+.recommendation-filter {
+    display: grid;
+    gap: 16px;
+}
+
+.recommendation-filter-title {
+    margin: 0;
+}
+
+.recommendation-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.recommendation-filter-field {
+    display: grid;
+    gap: 6px;
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.recommendation-open-now {
+    width: fit-content;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--color-text);
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.recommendation-open-now:hover {
+    border-color: rgba(37, 99, 235, 0.35);
+    background: #fff;
+    box-shadow: 0 0 0 4px var(--color-primary-soft);
+}
+
+.recommendation-open-now-checkbox {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0;
+    margin: 0;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+.recommendation-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.recommendation-filter-button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 16px;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    font-weight: 800;
+}
+
+.load-more-panel {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    padding: 10px 0 4px;
+}
+
+.load-more-count {
+    color: var(--color-text-soft);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.load-more-button {
+    min-width: min(100%, 260px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 13px 20px;
+    border-radius: 999px;
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(239, 246, 255, 0.95) 100%);
+    color: var(--color-primary-dark);
+    font-size: 0.98rem;
+    font-weight: 800;
+    box-shadow: var(--shadow-sm);
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease,
+        border-color 0.2s ease,
+        background 0.2s ease;
+}
+
+.load-more-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: rgba(37, 99, 235, 0.36);
+    background: #fff;
+    box-shadow: var(--shadow-md);
+}
+
+.load-more-button:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.load-more-button:focus-visible {
+    outline: 3px solid var(--color-primary-soft);
+    outline-offset: 3px;
+}
+
+.load-more-icon {
+    flex: 0 0 auto;
+}
+
+.load-more-icon.spin {
+    animation: spin 0.9s linear infinite;
+}
+
+.load-more-error {
+    margin: 0;
+    color: var(--color-danger, #b42318);
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-align: center;
+}
+
 /* =========================================
    CARDS & SURFACES (Thẻ và Bề mặt)
    ========================================= */

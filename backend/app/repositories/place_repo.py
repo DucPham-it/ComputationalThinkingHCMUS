@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -146,6 +148,46 @@ def _unique_texts(items: list[str]) -> list[str]:
     return result
 
 
+def _as_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(item) for item in value if item is not None]
+
+
+def _normalize_budget_level(value: Any) -> str | None:
+    if not value:
+        return None
+
+    normalized = str(value).strip().lower()
+    aliases = {
+        "cheap": "low",
+        "budget": "low",
+        "binh dan": "low",
+        "bình dân": "low",
+        "re": "low",
+        "rẻ": "low",
+        "mid": "medium",
+        "moderate": "medium",
+        "average": "medium",
+        "premium": "high",
+        "expensive": "high",
+        "luxury": "high",
+        "cao cap": "high",
+        "cao cấp": "high",
+    }
+    canonical = aliases.get(normalized, normalized)
+    return canonical if canonical in {"low", "medium", "high"} else None
+
+
 def _expand_search_patterns(keyword: str) -> list[str]:
     """Build database search patterns from free text and category aliases.
 
@@ -176,6 +218,123 @@ def _expand_search_patterns(keyword: str) -> list[str]:
             patterns.extend(aliases)
 
     return _unique_texts(patterns)[:16]
+
+
+def _build_database_filter_conditions(
+    filters: dict[str, Any] | None,
+    params: dict[str, object],
+    *,
+    latitude: float | None,
+    longitude: float | None,
+) -> list[str]:
+    """Build SQL conditions for hard candidate filters.
+
+    Input:
+    - filters: filter_plan from recommender.py with allowed_types, min_rating,
+      budget_level, max_distance_km.
+    - params: mutable SQL parameter dict.
+    - latitude/longitude: user location for a cheap bounding-box prefilter.
+
+    Output:
+    - SQL condition fragments. These narrow candidate fetching in the database;
+      app/recommendation/filters.py still performs the final safety filter.
+    """
+    if not filters:
+        return []
+
+    conditions: list[str] = []
+
+    allowed_types = _as_list(filters.get("allowed_types") or filters.get("preferred_types"))
+    type_conditions: list[str] = []
+    for type_index, place_type in enumerate(allowed_types):
+        normalized_type = place_type.strip().lower()
+        aliases = SEARCH_CATEGORY_ALIASES.get(normalized_type, (normalized_type,))
+        for alias_index, alias in enumerate(aliases):
+            param_name = f"filter_type_{type_index}_{alias_index}"
+            params[param_name] = f"%{alias.lower()}%"
+            type_conditions.append(f"LOWER(COALESCE(p.category, '')) LIKE :{param_name}")
+    if type_conditions:
+        conditions.append(f"({' OR '.join(type_conditions)})")
+
+    min_rating = _as_float(filters.get("min_rating"))
+    if min_rating is not None:
+        params["filter_min_rating"] = min_rating
+        conditions.append(
+            "(prs.average_rating IS NULL OR prs.average_rating >= :filter_min_rating)"
+        )
+
+    budget_level = _normalize_budget_level(filters.get("budget_level"))
+    if budget_level:
+        params["filter_budget_level"] = budget_level
+        if budget_level == "low":
+            conditions.append(
+                """
+                (
+                    p.price_level IS NULL
+                    OR p.price_level < 2
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%rẻ%'
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%cheap%'
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%low%'
+                )
+                """
+            )
+        elif budget_level == "medium":
+            conditions.append(
+                """
+                (
+                    p.price_level IS NULL
+                    OR p.price_level < 3
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%medium%'
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%moderate%'
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%tầm trung%'
+                )
+                """
+            )
+        elif budget_level == "high":
+            conditions.append(
+                """
+                (
+                    p.price_level IS NULL
+                    OR p.price_level >= 2
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%premium%'
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%luxury%'
+                    OR LOWER(COALESCE(p.price_range, '')) LIKE '%cao cấp%'
+                )
+                """
+            )
+
+    max_distance_km = _as_float(filters.get("max_distance_km"))
+    if (
+        max_distance_km is not None
+        and max_distance_km > 0
+        and latitude is not None
+        and longitude is not None
+    ):
+        delta_latitude = max_distance_km / 111.0
+        longitude_scale = max(0.01, abs(math.cos(math.radians(latitude))))
+        delta_longitude = max_distance_km / (111.0 * longitude_scale)
+        params.update(
+            {
+                "filter_min_latitude": latitude - delta_latitude,
+                "filter_max_latitude": latitude + delta_latitude,
+                "filter_min_longitude": longitude - delta_longitude,
+                "filter_max_longitude": longitude + delta_longitude,
+            }
+        )
+        conditions.append(
+            """
+            (
+                p.latitude IS NULL
+                OR p.longitude IS NULL
+                OR (
+                    p.latitude BETWEEN :filter_min_latitude AND :filter_max_latitude
+                    AND p.longitude BETWEEN :filter_min_longitude AND :filter_max_longitude
+                )
+            )
+            """
+        )
+
+    return conditions
 
 
 def _normalize_primary_type(category: str | None) -> str | None:
@@ -342,65 +501,76 @@ class PlaceRepository:
         )
         return self._to_place(row) if row else None
 
-    def search_local_places(self, keyword: str = "", limit: int = 50) -> list[Place]:
+    def search_local_places(
+        self,
+        keyword: str = "",
+        limit: int = 50,
+        *,
+        filters: dict[str, Any] | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
+    ) -> list[Place]:
+        """Search local catalog candidates with optional database-side filters.
+
+        Input:
+        - keyword: free text or category seed query.
+        - limit: maximum candidates to load before recommendation ranking.
+        - filters: filter_plan from recommender.py. Supported hard filters:
+          allowed_types, min_rating, budget_level, max_distance_km.
+        - latitude/longitude: user location for distance bounding box.
+
+        Output:
+        - Place rows from the local database. This is a candidate fetch; final
+          safety filtering still happens in app/recommendation/filters.py.
+        """
         safe_limit = max(1, int(limit or 50))
         search_patterns = _expand_search_patterns(keyword)
-
-        if not search_patterns:
-            rows = (
-                self._select_mappings(
-                    f"""
-                        SELECT {PLACE_SELECT_COLUMNS}
-                        FROM {PLACE_FROM_JOIN}
-                        WHERE COALESCE(p.status, 'active') <> 'deleted'
-                        ORDER BY
-                            CASE WHEN prs.average_rating IS NULL THEN 1 ELSE 0 END,
-                            COALESCE(prs.average_rating, 0) DESC,
-                            COALESCE(prs.review_count, 0) DESC,
-                            p.id ASC
-                        LIMIT :limit
-                        """,
-                    {"limit": safe_limit},
-                )
-                .all()
-            )
-            return [self._to_place(row) for row in rows]
-
         params: dict[str, object] = {"limit": safe_limit}
-        match_conditions: list[str] = []
+        conditions = ["COALESCE(p.status, 'active') <> 'deleted'"]
         score_parts: list[str] = []
 
-        for index, pattern in enumerate(search_patterns):
-            param_name = f"pattern_{index}"
-            params[param_name] = f"%{pattern}%"
-            match_conditions.append(
-                f"""
-                LOWER(p.title) LIKE :{param_name}
-                OR LOWER(COALESCE(p.category, '')) LIKE :{param_name}
-                OR LOWER(p.address_text) LIKE :{param_name}
-                OR LOWER(COALESCE(p.descriptions, '')) LIKE :{param_name}
-                """
-            )
-            score_parts.extend(
-                [
-                    f"CASE WHEN LOWER(p.title) LIKE :{param_name} THEN 4 ELSE 0 END",
-                    f"CASE WHEN LOWER(COALESCE(p.category, '')) LIKE :{param_name} THEN 3 ELSE 0 END",
-                    f"CASE WHEN LOWER(p.address_text) LIKE :{param_name} THEN 2 ELSE 0 END",
-                    f"CASE WHEN LOWER(COALESCE(p.descriptions, '')) LIKE :{param_name} THEN 1 ELSE 0 END",
-                ]
-            )
+        if search_patterns:
+            match_conditions: list[str] = []
+            for index, pattern in enumerate(search_patterns):
+                param_name = f"pattern_{index}"
+                params[param_name] = f"%{pattern}%"
+                match_conditions.append(
+                    f"""
+                    LOWER(p.title) LIKE :{param_name}
+                    OR LOWER(COALESCE(p.category, '')) LIKE :{param_name}
+                    OR LOWER(p.address_text) LIKE :{param_name}
+                    OR LOWER(COALESCE(p.descriptions, '')) LIKE :{param_name}
+                    """
+                )
+                score_parts.extend(
+                    [
+                        f"CASE WHEN LOWER(p.title) LIKE :{param_name} THEN 4 ELSE 0 END",
+                        f"CASE WHEN LOWER(COALESCE(p.category, '')) LIKE :{param_name} THEN 3 ELSE 0 END",
+                        f"CASE WHEN LOWER(p.address_text) LIKE :{param_name} THEN 2 ELSE 0 END",
+                        f"CASE WHEN LOWER(COALESCE(p.descriptions, '')) LIKE :{param_name} THEN 1 ELSE 0 END",
+                    ]
+                )
+            conditions.append(" OR ".join(f"({condition})" for condition in match_conditions))
 
-        search_score_sql = " + ".join(score_parts)
-        where_sql = " OR ".join(f"({condition})" for condition in match_conditions)
+        conditions.extend(
+            _build_database_filter_conditions(
+                filters,
+                params,
+                latitude=latitude,
+                longitude=longitude,
+            )
+        )
+        select_score_sql = f", ({' + '.join(score_parts)}) AS search_score" if score_parts else ""
+        order_score_sql = "search_score DESC," if score_parts else ""
+        where_sql = " AND ".join(f"({condition})" for condition in conditions)
         rows = (
             self._select_mappings(
                 f"""
-                    SELECT {PLACE_SELECT_COLUMNS}, ({search_score_sql}) AS search_score
+                    SELECT {PLACE_SELECT_COLUMNS}{select_score_sql}
                     FROM {PLACE_FROM_JOIN}
-                    WHERE COALESCE(p.status, 'active') <> 'deleted'
-                      AND ({where_sql})
+                    WHERE {where_sql}
                     ORDER BY
-                        search_score DESC,
+                        {order_score_sql}
                         CASE WHEN prs.average_rating IS NULL THEN 1 ELSE 0 END,
                         COALESCE(prs.average_rating, 0) DESC,
                         COALESCE(prs.review_count, 0) DESC,

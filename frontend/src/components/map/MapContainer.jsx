@@ -3,7 +3,7 @@
  */
 
 import { MapContainer as LeafletMapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 const mapContainerStyle = {
   width: "100%",
@@ -15,6 +15,22 @@ const defaultCenter = { latitude: 10.9804, longitude: 106.6519 };
 
 function resolveCoordinate(point, primaryKey, legacyKey) {
   return point?.[primaryKey] ?? point?.[legacyKey];
+}
+
+function toFiniteNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function resolveMapPoint(point) {
+  const latitude = toFiniteNumber(resolveCoordinate(point, "latitude", "lat"));
+  const longitude = toFiniteNumber(resolveCoordinate(point, "longitude", "lng"));
+
+  if (latitude == null || longitude == null) {
+    return null;
+  }
+
+  return [latitude, longitude];
 }
 
 function MapUpdater({ center, zoom }) {
@@ -33,6 +49,34 @@ function MapUpdater({ center, zoom }) {
       { animate: true }
     );
   }, [center, map, zoom]);
+
+  return null;
+}
+
+function MapBoundsUpdater({ points = [] }) {
+  const map = useMap();
+  const boundsPoints = useMemo(
+    () => points.map(resolveMapPoint).filter(Boolean),
+    [points]
+  );
+  const boundsKey = boundsPoints.map((point) => point.join(",")).join("|");
+
+  useEffect(() => {
+    if (!boundsPoints.length) {
+      return;
+    }
+
+    if (boundsPoints.length === 1) {
+      map.setView(boundsPoints[0], map.getZoom(), { animate: true });
+      return;
+    }
+
+    map.fitBounds(boundsPoints, {
+      animate: true,
+      maxZoom: 14,
+      padding: [32, 32],
+    });
+  }, [boundsKey, boundsPoints, map]);
 
   return null;
 }
@@ -58,6 +102,7 @@ export default function MapContainer({
   center,
   zoom = 14,
   onMapClick,
+  fitBoundsPoints = [],
   mapContainerClassName = "",
 }) {
   const resolvedCenter = center || defaultCenter;
@@ -78,6 +123,7 @@ export default function MapContainer({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapUpdater center={resolvedCenter} zoom={zoom} />
+        <MapBoundsUpdater points={fitBoundsPoints} />
         <MapClickHandler onMapClick={onMapClick} />
         {children}
       </LeafletMapContainer>

@@ -222,3 +222,107 @@ def test_search_local_places_matches_tokens_and_category_aliases():
     assert [place.name for place in cafe_results] == ["Quiet Coffee"]
 
     db.close()
+
+
+def test_search_local_places_applies_database_side_candidate_filters():
+    db = build_test_session()
+    cafe_id = db.execute(
+        text(
+            """
+            INSERT INTO places (
+                title,
+                category,
+                address_text,
+                latitude,
+                longitude,
+                price_level,
+                open_hours_json,
+                popular_times_json,
+                about_json,
+                status
+            )
+            VALUES (
+                'Quiet Coffee',
+                'Quán cà phê',
+                '789 Test Street',
+                10.777,
+                106.701,
+                1,
+                '{}',
+                '{}',
+                '[]',
+                'active'
+            )
+            RETURNING id
+            """
+        )
+    ).scalar_one()
+    park_id = db.execute(
+        text(
+            """
+            INSERT INTO places (
+                title,
+                category,
+                address_text,
+                latitude,
+                longitude,
+                price_level,
+                open_hours_json,
+                popular_times_json,
+                about_json,
+                status
+            )
+            VALUES (
+                'Green Park',
+                'Công viên',
+                'Far Test Street',
+                11.2,
+                107.2,
+                1,
+                '{}',
+                '{}',
+                '[]',
+                'active'
+            )
+            RETURNING id
+            """
+        )
+    ).scalar_one()
+    db.execute(
+        text(
+            """
+            INSERT INTO place_review_stats (place_id, average_rating, review_count)
+            VALUES (:place_id, 4.6, 15)
+            """
+        ),
+        {"place_id": cafe_id},
+    )
+    db.execute(
+        text(
+            """
+            INSERT INTO place_review_stats (place_id, average_rating, review_count)
+            VALUES (:place_id, 4.9, 20)
+            """
+        ),
+        {"place_id": park_id},
+    )
+    db.commit()
+
+    repo = PlaceRepository(db)
+
+    results = repo.search_local_places(
+        "",
+        limit=10,
+        filters={
+            "allowed_types": ["cafe"],
+            "min_rating": 4,
+            "budget_level": "low",
+            "max_distance_km": 3,
+        },
+        latitude=10.7769,
+        longitude=106.7009,
+    )
+
+    assert [place.name for place in results] == ["Quiet Coffee"]
+
+    db.close()

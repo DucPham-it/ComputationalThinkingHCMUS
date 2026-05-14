@@ -29,6 +29,9 @@ from app.repositories.pick_repo import PickRepository
 from app.repositories.search_history_repo import SearchHistoryRepository
 from app.services.place_search_service import search_places
 
+DEFAULT_CANDIDATE_LIMIT = 80
+FILTERED_CANDIDATE_LIMIT = 1000
+
 
 def _place_to_dict(place) -> dict[str, Any]:
     """Convert a Place model into the recommendation dict contract.
@@ -101,6 +104,32 @@ def _dedupe_places(places: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deduped
 
 
+def _build_candidate_search_query(
+    *,
+    parsed_query: dict[str, Any],
+    raw_query: str,
+    allowed_types: list[str],
+) -> str:
+    """Build the database search seed before filtering and ranking.
+
+    Input:
+    - parsed_query: output from parse_search_text.
+    - raw_query: original user search text.
+    - allowed_types: UI/NLP category filters.
+
+    Output:
+    - search text passed to PlaceRepository.search_local_places.
+    - For filter-only category searches, returns that category so the database
+      fetch is category-scoped rather than top-rated-general.
+    """
+    local_query = str(parsed_query.get("local_query") or "").strip()
+    if local_query:
+        return local_query
+    if raw_query.strip():
+        return raw_query.strip()
+    return " ".join(allowed_types).strip()
+
+
 def recommend_places(
     query: str = "",
     latitude: float | None = None,
@@ -117,6 +146,7 @@ def recommend_places(
     require_open_now: bool = False,
     min_rating: float | None = None,
     limit: int = 10,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Return top place recommendations.
 
@@ -139,6 +169,7 @@ def recommend_places(
     - require_open_now: only keep currently-open places when true.
     - min_rating: minimum rating 0..5.
     - limit: output count, default 10 per project requirement.
+    - offset: number of ranked places to skip for "load more" pagination.
 
     Output:
     - list[dict] of top places sorted by score, length <= limit.
@@ -173,27 +204,27 @@ def recommend_places(
 
     has_query = bool(query.strip())
     has_structured_filters = any(key != "source_map" for key in filter_plan)
-    candidate_limit = 240 if has_query or has_structured_filters else 60
+    candidate_limit = (
+        FILTERED_CANDIDATE_LIMIT
+        if has_query or has_structured_filters
+        else DEFAULT_CANDIDATE_LIMIT
+    )
+    candidate_query = _build_candidate_search_query(
+        parsed_query=parsed,
+        raw_query=query,
+        allowed_types=resolved_allowed_types,
+    )
 
     places = search_places(
-        query=parsed.get("local_query") or query,
+        query=candidate_query,
         external_query="",
         latitude=latitude,
         longitude=longitude,
         db=db,
         limit=candidate_limit,
+        filters=filter_plan if has_structured_filters else None,
     )
 
-    if has_query or has_structured_filters:
-        broad_database_places = search_places(
-            query="",
-            external_query="",
-            latitude=latitude,
-            longitude=longitude,
-            db=db,
-            limit=candidate_limit,
-        )
-        places = _dedupe_places(places + broad_database_places)
     recent_queries: list[str] = []
     saved_ids: list[int] = []
     picked_ids: list[int] = []
@@ -226,6 +257,9 @@ def recommend_places(
         require_open_now=bool(filter_plan.get("require_open_now")),
         min_rating=filter_plan.get("min_rating"),
         budget_level=filter_plan.get("budget_level"),
+        user_location={"latitude": latitude, "longitude": longitude}
+        if latitude is not None and longitude is not None
+        else None,
         companion_type=filter_plan.get("companion_type"),
         time_slot=filter_plan.get("time_slot"),
     )
@@ -239,7 +273,9 @@ def recommend_places(
         picked_places=picked_place_dicts,
         preferred_types=ranking_preferred_types,
     )
-    return ranked[: max(1, int(limit or 10))]
+    safe_limit = max(1, int(limit or 10))
+    safe_offset = max(0, int(offset or 0))
+    return ranked[safe_offset : safe_offset + safe_limit]
 
 
 def build_recommendation_context(
@@ -290,13 +326,22 @@ def build_recommendation_context(
     latitude = ui_filters.get("latitude")
     longitude = ui_filters.get("longitude")
     context_has_filters = any(key != "source_map" for key in effective_filters)
+    context_allowed_types = list(effective_filters.get("allowed_types") or [])
+    context_candidate_query = _build_candidate_search_query(
+        parsed_query=parsed,
+        raw_query=query,
+        allowed_types=context_allowed_types,
+    )
     candidates = search_places(
-        query=parsed.get("local_query") or query,
+        query=context_candidate_query,
         external_query="",
         latitude=latitude,
         longitude=longitude,
         db=db,
-        limit=240 if query.strip() or context_has_filters else 60,
+        limit=FILTERED_CANDIDATE_LIMIT
+        if query.strip() or context_has_filters
+        else DEFAULT_CANDIDATE_LIMIT,
+        filters=effective_filters if context_has_filters else None,
     )
 
     favorite_repo = FavoriteRepository(db)
@@ -324,6 +369,9 @@ def build_recommendation_context(
         "candidate_seed_strategy": candidate_seed_strategy,
         "candidates": _dedupe_places(candidates + saved_places + picked_places),
         "query": query,
+        "user_location": {"latitude": latitude, "longitude": longitude}
+        if latitude is not None and longitude is not None
+        else None,
     }
 
 
@@ -363,6 +411,7 @@ def recommend_top_10_contract(context: dict[str, Any]) -> list[dict[str, Any]]:
         require_open_now=bool(effective_filters.get("require_open_now")),
         min_rating=effective_filters.get("min_rating"),
         budget_level=effective_filters.get("budget_level"),
+        user_location=context.get("user_location"),
         companion_type=effective_filters.get("companion_type"),
         time_slot=effective_filters.get("time_slot"),
     )

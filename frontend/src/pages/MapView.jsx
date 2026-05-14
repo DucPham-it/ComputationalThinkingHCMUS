@@ -7,7 +7,7 @@
  * - TV6: Map Pick To Route.
  *
  * File input:
- * - places prop or AppContext.recommendationPlaces.
+ * - AppContext.recommendationPlaces plus optional places prop.
  * - Browser GPS/currentLocation from AppContext.
  * - User clicks on markers or free map coordinates.
  *
@@ -25,11 +25,12 @@
 import MapContainer from "../components/map/MapContainer";
 import MarkerList from "../components/map/MarkerList";
 import PlaceRequestForm from "../components/map/PlaceRequestForm";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { CircleMarker, Tooltip } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../hooks/useApp";
 import { getCurrentBrowserLocation } from "../utils/geolocation";
+import { mergePlacesByKey } from "../utils/placeCollection";
 import { addFavorite } from "../services/favoriteService";
 import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/mapPickService";
 
@@ -141,11 +142,17 @@ export default function MapView({ places = [] }) {
     const [mapCenter, setMapCenter] = useState({ latitude: 10.7769, longitude: 106.7009 });
     const [selectedPlaceId, setSelectedPlaceId] = useState(null);
     const [requestTargetPlace, setRequestTargetPlace] = useState(null);
-    const mapPlaces = places.length ? places : recommendationPlaces;
+    const mapPlaces = useMemo(
+        () => mergePlacesByKey(recommendationPlaces, places),
+        [places, recommendationPlaces]
+    );
+    const mapFitBoundsPoints = useMemo(
+        () => [currentLocation, ...mapPlaces].filter(Boolean),
+        [currentLocation, mapPlaces]
+    );
 
     function mergePlaces(nextPlace) {
-        const sourcePlaces = places.length ? places : recommendationPlaces;
-        const mergedPlaces = [nextPlace, ...sourcePlaces.filter((place) => place.id !== nextPlace.id)];
+        const mergedPlaces = mergePlacesByKey([nextPlace], mapPlaces);
         setRecommendationPlaces(mergedPlaces);
         return mergedPlaces;
     }
@@ -302,6 +309,7 @@ export default function MapView({ places = [] }) {
                 center={mapCenter}
                 zoom={13}
                 onMapClick={handleMapClick}
+                fitBoundsPoints={mapFitBoundsPoints}
             >
                 {currentLocation ? (
                     <CircleMarker

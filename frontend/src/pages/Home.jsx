@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Compass } from "lucide-react";
+import { ChevronDown, Compass, LoaderCircle, Sparkles } from "lucide-react";
 
 import Section from "../components/common/Section";
 import SearchBar from "../components/common/SearchBar";
@@ -12,13 +12,13 @@ import FilterPanel, {
     EMPTY_RECOMMENDATION_FILTERS,
     buildRecommendationFilterPayload,
 } from "../components/recommendation/FilterPanel";
-import RankingPanel from "../components/recommendation/RankingPanel";
 import RecommendationList from "../components/recommendation/RecommendationList";
 
-import { fetchRecommendations } from "../services/recommendationService";
+import { fetchRecommendations, RECOMMENDATION_PAGE_SIZE } from "../services/recommendationService";
 import { useAuth } from "../hooks/useAuth";
 import { useApp } from "../hooks/useApp";
 import { getCurrentBrowserLocation } from "../utils/geolocation";
+import { mergePlacesByKey } from "../utils/placeCollection";
 
 /**
  * Màn hình Home (Trang chủ)
@@ -34,7 +34,7 @@ import { getCurrentBrowserLocation } from "../utils/geolocation";
  *
  * File output:
  * - Calls fetchRecommendations with query, filters, latitude, longitude.
- * - Stores top 10 returned places in local state and AppContext.
+ * - Stores returned places and loaded-more pages in local state and AppContext.
  * - Renders loading, empty, error, and RecommendationList states.
  *
  * Implementation:
@@ -51,9 +51,14 @@ export default function Home() {
     const [query, setQuery] = useState("");
     const [places, setPlaces] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(null);
+    const [loadMoreError, setLoadMoreError] = useState(null);
     const [locationStatus, setLocationStatus] = useState("");
     const [filters, setFilters] = useState(EMPTY_RECOMMENDATION_FILTERS);
+    const [hasMore, setHasMore] = useState(false);
+    const [nextOffset, setNextOffset] = useState(null);
+    const [lastSearchParams, setLastSearchParams] = useState(null);
     
     // State UX để đổi tiêu đề khi đã thực hiện tìm kiếm
     const [hasSearched, setHasSearched] = useState(false);
@@ -85,20 +90,29 @@ export default function Home() {
 
         const trimmedQuery = nextQuery.trim();
         const hasFilters = Object.keys(filterPayload).length > 0;
+        const requestParams = {
+            ...(trimmedQuery ? { query: trimmedQuery } : {}),
+            ...filterPayload,
+            ...buildLocationParams(),
+        };
 
         try {
             setHasSearched(Boolean(trimmedQuery || hasFilters));
             setLoading(true);
             setError(null);
+            setLoadMoreError(null);
 
             const data = await fetchRecommendations({
-                ...(trimmedQuery ? { query: trimmedQuery } : {}),
-                ...filterPayload,
-                ...buildLocationParams(),
+                ...requestParams,
+                limit: RECOMMENDATION_PAGE_SIZE,
+                offset: 0,
             });
             const items = data.items ?? [];
             setPlaces(items);
             setRecommendationPlaces(items);
+            setHasMore(Boolean(data.has_more));
+            setNextOffset(data.next_offset ?? null);
+            setLastSearchParams(requestParams);
 
             if (trimmedQuery || hasFilters) {
                 scrollToResults();
@@ -106,8 +120,12 @@ export default function Home() {
         } catch (err) {
             console.error(err);
             setError("Search failed. Please try again.");
+            setLoadMoreError(null);
             setPlaces([]);
             setRecommendationPlaces([]);
+            setHasMore(false);
+            setNextOffset(null);
+            setLastSearchParams(null);
         } finally {
             setLoading(false);
         }
@@ -153,7 +171,12 @@ export default function Home() {
             setRecommendationPlaces([]);
             setHasSearched(false);
             setLoading(false);
+            setLoadingMore(false);
             setError(null);
+            setLoadMoreError(null);
+            setHasMore(false);
+            setNextOffset(null);
+            setLastSearchParams(null);
         }
     }, [canUseChat, setRecommendationPlaces]);
 
@@ -168,19 +191,32 @@ export default function Home() {
             try {
                 setLoading(true);
                 setError(null);
+                setLoadMoreError(null);
 
-                const data = await fetchRecommendations(buildLocationParams());
+                const requestParams = buildLocationParams();
+                const data = await fetchRecommendations({
+                    ...requestParams,
+                    limit: RECOMMENDATION_PAGE_SIZE,
+                    offset: 0,
+                });
                 if (!active) return;
                 const items = data.items ?? [];
                 setPlaces(items);
                 setRecommendationPlaces(items);
                 setHasSearched(false);
+                setHasMore(Boolean(data.has_more));
+                setNextOffset(data.next_offset ?? null);
+                setLastSearchParams(requestParams);
             } catch (err) {
                 if (!active) return;
                 console.error(err);
                 setError("Suggestions are unavailable right now. Please try again.");
+                setLoadMoreError(null);
                 setPlaces([]);
                 setRecommendationPlaces([]);
+                setHasMore(false);
+                setNextOffset(null);
+                setLastSearchParams(null);
             } finally {
                 if (active) {
                     setLoading(false);
@@ -213,6 +249,43 @@ export default function Home() {
 
     async function handleFilterApply(filterPayload) {
         await runRecommendationSearch(query, filterPayload);
+    }
+
+    async function handleLoadMore() {
+        if (!canUseChat || loadingMore || loading || !hasMore || nextOffset == null) {
+            return;
+        }
+
+        const requestParams = lastSearchParams ?? {
+            ...(query.trim() ? { query: query.trim() } : {}),
+            ...buildRecommendationFilterPayload(filters),
+            ...buildLocationParams(),
+        };
+
+        try {
+            setLoadingMore(true);
+            setLoadMoreError(null);
+
+            const data = await fetchRecommendations({
+                ...requestParams,
+                limit: RECOMMENDATION_PAGE_SIZE,
+                offset: nextOffset,
+            });
+            const incomingItems = data.items ?? [];
+
+            setPlaces((currentPlaces) => {
+                const mergedPlaces = mergePlacesByKey(currentPlaces, incomingItems);
+                setRecommendationPlaces(mergedPlaces);
+                return mergedPlaces;
+            });
+            setHasMore(Boolean(data.has_more));
+            setNextOffset(data.next_offset ?? null);
+        } catch (err) {
+            console.error(err);
+            setLoadMoreError("Could not load more places. Please try again.");
+        } finally {
+            setLoadingMore(false);
+        }
     }
 
     return (
@@ -324,21 +397,14 @@ export default function Home() {
 
             {/* BỘ LỌC TÌM KIẾM */}
             <Section 
-                title="Customize your results"
-                subtitle="Adjust filters to match your preferences"
             >
-                <div className="section-soft row" style={{ gap: "16px", alignItems: "flex-start" }}>
-                    <div style={{ flex: "1 1 300px" }}>
-                        <FilterPanel
-                            value={filters}
-                            onChange={setFilters}
-                            onApply={handleFilterApply}
-                            disabled={!canUseChat}
-                        />
-                    </div>
-                    <div style={{ flex: "1 1 300px" }}>
-                        <RankingPanel />
-                    </div>
+                <div className="section-soft">
+                    <FilterPanel
+                        value={filters}
+                        onChange={setFilters}
+                        onApply={handleFilterApply}
+                        disabled={!canUseChat}
+                    />
                 </div>
             </Section>
 
@@ -351,10 +417,8 @@ export default function Home() {
                 subtitle={
                     !canUseChat
                         ? "Complete your profile to unlock AI recommendations"
-                        : !hasSearched && !loading && !error && places.length > 0
-                        ? "Default suggestions are generated from your address, saved places, picks, and recent searches."
                         : !hasSearched
-                        ? "Default suggestions are generated from your address and your recent activity."
+                        ? ""
                         : !loading && !error && places.length > 0 
                         ? `Found ${places.length} amazing places` 
                         : "No places matched your current query."
@@ -368,15 +432,6 @@ export default function Home() {
                         </p>
                     </div>
                 )}
-
-                {canUseChat && !hasSearched && !loading && !error ? (
-                    <div className="card" style={{ display: "grid", gap: "12px" }}>
-                        <h3 style={{ marginBottom: 0 }}>Suggestion</h3>
-                        <p style={{ marginBottom: 0 }}>
-                            We generate suggestions near your profile address first, then learn from the places you save, pick, and search. The live map stays on the <strong style={{ color: "var(--color-text)" }}>Map</strong> page.
-                        </p>
-                    </div>
-                ) : null}
 
                 {loading && (
                     <LoadingSpinner message="Finding best places for you..." />
@@ -402,8 +457,33 @@ export default function Home() {
                 )}
 
                 {canUseChat && !loading && !error && places.length > 0 && (
-                    <div className="fade-in-delay-1">
+                    <div className="fade-in-delay-1" style={{ display: "grid", gap: "18px" }}>
                         <RecommendationList places={places} />
+                        {hasMore ? (
+                            <div className="load-more-panel">
+                                <span className="load-more-count">
+                                    Showing {places.length} places
+                                </span>
+                                <button
+                                    type="button"
+                                    className="load-more-button"
+                                    onClick={handleLoadMore}
+                                    disabled={loadingMore}
+                                >
+                                    {loadingMore ? (
+                                        <LoaderCircle className="load-more-icon spin" size={18} />
+                                    ) : (
+                                        <ChevronDown className="load-more-icon" size={18} />
+                                    )}
+                                    <span>{loadingMore ? "Loading..." : "Load more places"}</span>
+                                </button>
+                                {loadMoreError ? (
+                                    <p className="load-more-error">
+                                        {loadMoreError}
+                                    </p>
+                                ) : null}
+                            </div>
+                        ) : null}
                     </div>
                 )}
             </Section>

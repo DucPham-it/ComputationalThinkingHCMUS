@@ -12,7 +12,7 @@ File output:
 - Persisted search history for personalization.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_completed_profile
@@ -63,6 +63,8 @@ def get_recommendations(
     min_rating: float | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
+    limit: int = Query(default=10, ge=1, le=30),
+    offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(require_completed_profile),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -83,11 +85,13 @@ def get_recommendations(
     - require_open_now: when true, only return currently-open candidates
     - min_rating: minimum rating 0..5
     - latitude/longitude: GPS or map context
+    - limit: number of ranked places to return, default 10, max 30
+    - offset: number of ranked places to skip for "load more"
     - current_user: authenticated user with completed profile
     - db: SQLAlchemy session
 
     Output:
-    - {"items": top 10 recommended place dicts}.
+    - {"items": ranked place dicts, "has_more", "next_offset", "limit", "offset"}.
     - Each item should be compatible with PlaceResponse/RecommendationList:
       id, name, address, latitude, longitude, rating, review_count,
       primary_type/category, photo_url/thumbnail, score, explanation if present.
@@ -109,6 +113,9 @@ def get_recommendations(
         effective_latitude = geocoded_address.get("latitude")
         effective_longitude = geocoded_address.get("longitude")
 
+    safe_limit = min(max(int(limit or 10), 1), 30)
+    safe_offset = max(int(offset or 0), 0)
+
     history_query = _build_history_query(
         query,
         {
@@ -121,7 +128,7 @@ def get_recommendations(
             "min_rating": min_rating,
         },
     )
-    if history_query:
+    if history_query and safe_offset == 0:
         SearchHistoryRepository(db).record_search(
             user_id=current_user["id"],
             query=history_query,
@@ -129,7 +136,7 @@ def get_recommendations(
             longitude=effective_longitude,
         )
 
-    items = recommend_places(
+    page_items = recommend_places(
         query=query,
         latitude=effective_latitude,
         longitude=effective_longitude,
@@ -143,6 +150,15 @@ def get_recommendations(
         max_distance_km=max_distance_km,
         require_open_now=require_open_now,
         min_rating=min_rating,
-        limit=10,
+        limit=safe_limit + 1,
+        offset=safe_offset,
     )
-    return {"items": items}
+    items = page_items[:safe_limit]
+    has_more = len(page_items) > safe_limit
+    return {
+        "items": items,
+        "limit": safe_limit,
+        "offset": safe_offset,
+        "has_more": has_more,
+        "next_offset": safe_offset + len(items) if has_more else None,
+    }

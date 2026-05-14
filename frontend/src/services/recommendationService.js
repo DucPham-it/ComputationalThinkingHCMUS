@@ -14,6 +14,8 @@ import api from "./api";
  * - No map-pick or route side effects live in this file.
  */
 
+export const RECOMMENDATION_PAGE_SIZE = 10;
+
 export function normalizeBudgetLevel(value) {
   /**
    * Input:
@@ -100,9 +102,11 @@ export async function fetchRecommendations(params) {
    * - params.max_distance_km: radius filter.
    * - params.require_open_now: boolean.
    * - params.min_rating: 0..5.
+   * - params.limit: page size for recommendations.
+   * - params.offset: ranked item offset for loading more.
    *
    * Output:
-   * - { items: PlaceSummary[] } with at most 10 items.
+   * - { items: PlaceSummary[], has_more, next_offset, limit, offset }.
    * - each item is passed to RecommendationList, MapView, and route pick flow.
    */
   const response = await api.get("/recommendations", { params });

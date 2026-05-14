@@ -1,3 +1,5 @@
+import { Check, RotateCcw } from "lucide-react";
+
 import { buildRecommendationFilterPayload as buildPayload } from "../../services/recommendationService";
 
 export const EMPTY_RECOMMENDATION_FILTERS = {
@@ -126,17 +128,11 @@ export default function FilterPanel({
   }
 
   return (
-    <form className="card" onSubmit={handleApply} style={{ display: "grid", gap: "14px" }}>
-      <h3 style={{ margin: 0 }}>Filters</h3>
+    <form className="card recommendation-filter" onSubmit={handleApply}>
+      <h3 className="recommendation-filter-title">Filters</h3>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-          gap: "12px",
-        }}
-      >
-        <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+      <div className="recommendation-filter-grid">
+        <label className="recommendation-filter-field">
           Type
           <select
             value={filters.entertainment_type}
@@ -151,7 +147,7 @@ export default function FilterPanel({
           </select>
         </label>
 
-        <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+        <label className="recommendation-filter-field">
           Budget
           <select
             value={filters.budget_level}
@@ -166,7 +162,7 @@ export default function FilterPanel({
           </select>
         </label>
 
-        <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+        <label className="recommendation-filter-field">
           Group
           <select
             value={filters.companion_type}
@@ -181,7 +177,7 @@ export default function FilterPanel({
           </select>
         </label>
 
-        <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+        <label className="recommendation-filter-field">
           Time
           <select
             value={filters.start_time}
@@ -196,7 +192,7 @@ export default function FilterPanel({
           </select>
         </label>
 
-        <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+        <label className="recommendation-filter-field">
           Distance
           <select
             value={filters.max_distance_km}
@@ -211,7 +207,7 @@ export default function FilterPanel({
           </select>
         </label>
 
-        <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+        <label className="recommendation-filter-field">
           Rating
           <select
             value={filters.min_rating}
@@ -227,22 +223,30 @@ export default function FilterPanel({
         </label>
       </div>
 
-      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600 }}>
+      <label className="recommendation-open-now">
         <input
+          className="recommendation-open-now-checkbox"
           type="checkbox"
           checked={filters.require_open_now}
           onChange={(event) => updateField("require_open_now", event.target.checked)}
           disabled={disabled}
         />
-        Open now
+        <span>Open now</span>
       </label>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-        <button type="submit" disabled={disabled}>
-          Apply
+      <div className="recommendation-filter-actions">
+        <button className="btn-primary recommendation-filter-button" type="submit" disabled={disabled}>
+          <Check size={18} />
+          <span>Apply</span>
         </button>
-        <button type="button" className="button-secondary" onClick={handleReset} disabled={disabled}>
-          Reset
+        <button
+          type="button"
+          className="btn-outline recommendation-filter-button"
+          onClick={handleReset}
+          disabled={disabled}
+        >
+          <RotateCcw size={17} />
+          <span>Reset</span>
         </button>
       </div>
     </form>

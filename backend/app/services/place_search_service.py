@@ -72,14 +72,35 @@ def search_places(
     longitude: float | None = None,
     db: Session | None = None,
     limit: int = 60,
+    filters: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    """Search local place candidates.
+
+    Input:
+    - query: text/category seed used by PlaceRepository search.
+    - latitude/longitude: optional user location for distance and DB prefilter.
+    - db: SQLAlchemy session.
+    - limit: candidate count before ranking.
+    - filters: optional filter_plan from recommender.py. The repository uses
+      hard filters to narrow database candidates, while recommendation filters
+      still run afterward as a safety pass.
+
+    Output:
+    - list of recommendation candidate dicts.
+    """
     del external_query
 
     if db is None:
         return []
 
     place_repo = PlaceRepository(db)
-    local_places = place_repo.search_local_places(query, limit=limit)
+    local_places = place_repo.search_local_places(
+        query,
+        limit=limit,
+        filters=filters,
+        latitude=latitude,
+        longitude=longitude,
+    )
     return [
         _to_result_item(place, latitude=latitude, longitude=longitude)
         for place in local_places

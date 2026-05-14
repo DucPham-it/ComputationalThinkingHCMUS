@@ -23,6 +23,7 @@ class RecommendationQuery(BaseModel):
     - preferred_types: explicit UI category list
     - require_open_now: only suggest currently-open places when true
     - min_rating: minimum average rating filter
+    - limit/offset: recommendation pagination for loading more results
 
     Output:
     - used by routes/recommendations.py to produce top 10 PlaceResponse-like dicts.
@@ -41,6 +42,8 @@ class RecommendationQuery(BaseModel):
     preferred_types: list[str] = Field(default_factory=list)
     require_open_now: bool = False
     min_rating: float | None = Field(default=None, ge=0, le=5)
+    limit: int = Field(default=10, ge=1, le=30)
+    offset: int = Field(default=0, ge=0)
 
 
 class ResolvePlacePointRequest(BaseModel):

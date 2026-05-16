@@ -237,14 +237,7 @@ export default function MapView({ places = [] }) {
     }
 
     function handlePickPlace(place) {
-        let destination;
-        try {
-            destination = buildRouteDestinationFromMapPick(place);
-        } catch (error) {
-            alert("This marker is missing coordinates. Cannot navigate to route.");
-            return;
-        }
-
+        
         let destination;
         try {
             destination = buildRouteDestinationFromMapPick(place);
@@ -261,7 +254,6 @@ export default function MapView({ places = [] }) {
         }
 
         confirmPlace(place);
-        setPickedPlace(destination);
         setPickedPlace(destination);
         navigate("/route");
     }

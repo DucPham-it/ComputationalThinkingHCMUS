@@ -102,7 +102,10 @@ export default function PlacePopupCard({
             className="btn-outline"
             style={{ padding: "8px 10px", borderRadius: "10px", fontWeight: 700 }}
             disabled={!canViewPlace}
-            onClick={() => onViewPlace?.(place)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewPlace?.(place);
+            }}
           >
             <ExternalLink size={14} style={{ marginRight: "4px" }} />
             View
@@ -111,7 +114,10 @@ export default function PlacePopupCard({
             className="btn-outline"
             style={{ padding: "8px 10px", borderRadius: "10px", fontWeight: 700 }}
             disabled={!canSavePlace}
-            onClick={() => onSavePlace?.(place)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSavePlace?.(place);
+            }}
           >
             <Heart size={14} style={{ marginRight: "4px" }} />
             Save
@@ -119,7 +125,10 @@ export default function PlacePopupCard({
           <button
             className="btn-primary"
             style={{ padding: "8px 10px", borderRadius: "10px", fontWeight: 700 }}
-            onClick={() => onPrimaryAction?.(place)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPrimaryAction?.(place);
+            }}
           >
             <Route size={14} style={{ marginRight: "4px" }} />
             {primaryActionLabel}
@@ -130,7 +139,10 @@ export default function PlacePopupCard({
           <button
             className="btn-outline"
             style={{ padding: "8px 10px", borderRadius: "10px", fontWeight: 700 }}
-            onClick={() => onSuggestChange(place)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSuggestChange(place);
+            }}
           >
             <MessageSquarePlus size={14} style={{ marginRight: "4px" }} />
             Suggest add/edit/delete
@@ -147,7 +159,10 @@ export default function PlacePopupCard({
               color: "#b91c1c",
               borderColor: "#fecaca",
             }}
-            onClick={() => onCancelSelection(place)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancelSelection(place);
+            }}
           >
             {cancelActionLabel}
           </button>

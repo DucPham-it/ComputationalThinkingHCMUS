@@ -87,6 +87,16 @@ export default function MarkerList({
               click: () => handleMarkerClick(place),
               popupclose: handleCloseClick,
             }}
+            ref={(marker) => {
+              if (marker && selected?.id === place.id) {
+                // Ensure popup opens automatically when selected programmatically (like map click)
+                setTimeout(() => {
+                  if (marker && !marker.isPopupOpen()) {
+                    marker.openPopup();
+                  }
+                }, 50);
+              }
+            }}
           >
             {selected?.id === place.id ? (
               <Popup closeButton>

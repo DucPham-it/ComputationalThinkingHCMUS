@@ -2,7 +2,7 @@
  * Leaflet map container using OpenStreetMap tiles.
  */
 
-import { MapContainer as LeafletMapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer as LeafletMapContainer, TileLayer, useMap, useMapEvents, ZoomControl } from "react-leaflet";
 import { useEffect, useMemo } from "react";
 
 const mapContainerStyle = {
@@ -45,10 +45,10 @@ function MapUpdater({ center, zoom }) {
         resolveCoordinate(center, "latitude", "lat"),
         resolveCoordinate(center, "longitude", "lng"),
       ],
-      zoom,
+      map.getZoom(),
       { animate: true }
     );
-  }, [center, map, zoom]);
+  }, [center, map]);
 
   return null;
 }
@@ -115,6 +115,7 @@ export default function MapContainer({
           resolveCoordinate(resolvedCenter, "longitude", "lng"),
         ]}
         zoom={zoom}
+        zoomControl={false}
         scrollWheelZoom
         style={mapContainerStyle}
       >
@@ -122,6 +123,7 @@ export default function MapContainer({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <ZoomControl position="bottomright" />
         <MapUpdater center={resolvedCenter} zoom={zoom} />
         <MapBoundsUpdater points={fitBoundsPoints} />
         <MapClickHandler onMapClick={onMapClick} />

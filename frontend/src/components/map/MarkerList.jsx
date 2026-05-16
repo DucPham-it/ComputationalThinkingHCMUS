@@ -85,7 +85,6 @@ export default function MarkerList({
             pathOptions={markerAppearance.pathOptions}
             eventHandlers={{
               click: () => handleMarkerClick(place),
-              popupclose: handleCloseClick,
             }}
             ref={(marker) => {
               if (marker && selected?.id === place.id) {

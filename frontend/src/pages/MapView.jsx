@@ -245,6 +245,14 @@ export default function MapView({ places = [] }) {
             return;
         }
 
+        let destination;
+        try {
+            destination = buildRouteDestinationFromMapPick(place);
+        } catch (error) {
+            alert("This marker is missing coordinates. Cannot navigate to route.");
+            return;
+        }
+
         const databasePlaceId = getDatabasePlaceId(place);
         if (databasePlaceId !== null) {
             recordPlacePick(databasePlaceId).catch((error) => {
@@ -253,6 +261,7 @@ export default function MapView({ places = [] }) {
         }
 
         confirmPlace(place);
+        setPickedPlace(destination);
         setPickedPlace(destination);
         navigate("/route");
     }
@@ -295,6 +304,7 @@ export default function MapView({ places = [] }) {
             }
         } catch (error) {
             console.error("Failed to resolve clicked point", error);
+            // Fallback is already showing, nothing to do
         }
     }
 

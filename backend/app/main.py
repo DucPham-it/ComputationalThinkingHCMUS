@@ -22,6 +22,7 @@ from app.api.routes import (
     routes,
     uploads,
     weather,
+    tts,
 )
 from app.core.config import settings
 from app.db.connection import check_database_connection
@@ -48,6 +49,7 @@ app.include_router(recommendations.router, prefix="/api/v1/recommendations", tag
 app.include_router(recommendation_picks.router, prefix="/api/v1/recommendations", tags=["recommendation-picks"])
 app.include_router(routes.router, prefix="/api/v1/routes", tags=["routes"])
 app.include_router(weather.router, prefix="/api/v1/weather", tags=["weather"])
+app.include_router(tts.router, prefix="/api/v1/tts", tags=["tts"])
 
 
 @app.get("/health")

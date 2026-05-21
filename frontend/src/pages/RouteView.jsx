@@ -146,6 +146,7 @@ export default function RouteView() {
     setCurrentLocation,
     recommendationPlaces,
     setRecommendationPlaces,
+    hasSearched,
   } = useApp();
   const [travelMode, setTravelMode] = useState("DRIVING");
   const [originMode, setOriginMode] = useState(currentLocation ? "gps" : "manual");
@@ -161,6 +162,7 @@ export default function RouteView() {
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [locationNotice, setLocationNotice] = useState("");
   const [selectedPopupPlaceId, setSelectedPopupPlaceId] = useState(null);
+  const [mapCenter, setMapCenter] = useState(() => currentLocation || { latitude: 10.7769, longitude: 106.7009 });
 
   const [inNavigationMode, setInNavigationMode] = useState(false);
 
@@ -245,10 +247,12 @@ export default function RouteView() {
       typeof selectedPlace.latitude === "number" &&
       typeof selectedPlace.longitude === "number"
     ) {
-      setDestinationPoint({
+      const coords = {
         latitude: selectedPlace.latitude,
         longitude: selectedPlace.longitude,
-      });
+      };
+      setDestinationPoint(coords);
+      setMapCenter(coords);
     }
   }, [selectedPlace]);
 
@@ -269,24 +273,21 @@ export default function RouteView() {
     let active = true;
 
     async function hydrateLocation() {
-      if (currentLocation) {
-        setOriginMode("gps");
-        setSelectionTarget("destination");
-        return;
-      }
-
       try {
         const browserLocation = await getCurrentBrowserLocation();
         if (!active) return;
         setCurrentLocation(browserLocation);
+        setMapCenter(browserLocation);
         setOriginMode("gps");
         setSelectionTarget("destination");
         setLocationNotice("Using your current GPS location as the default start point.");
       } catch (error) {
         if (!active) return;
-        setOriginMode("manual");
-        setSelectionTarget("origin");
-        setLocationNotice("GPS is unavailable. Pick the start point on the map or enter it manually.");
+        if (!currentLocation) {
+          setOriginMode("manual");
+          setSelectionTarget("origin");
+          setLocationNotice("GPS is unavailable. Pick the start point on the map or enter it manually.");
+        }
       }
     }
 
@@ -294,37 +295,9 @@ export default function RouteView() {
     return () => {
       active = false;
     };
-  }, [currentLocation, setCurrentLocation]);
+  }, [setCurrentLocation]);
 
   const canUseRoute = isAuthenticated && hasCompletedProfile;
-
-  const mapCenter = useMemo(() => {
-    if (selectionTarget === "destination" && destinationPoint) {
-      return destinationPoint;
-    }
-
-    if (originMode === "gps" && currentLocation) {
-      return currentLocation;
-    }
-
-    if (originPoint) {
-      return originPoint;
-    }
-
-    if (destinationPoint) {
-      return destinationPoint;
-    }
-
-    if (
-      selectedPlace &&
-      typeof selectedPlace.latitude === "number" &&
-      typeof selectedPlace.longitude === "number"
-    ) {
-      return { latitude: selectedPlace.latitude, longitude: selectedPlace.longitude };
-    }
-
-    return { latitude: 10.7769, longitude: 106.7009 };
-  }, [currentLocation, destinationPoint, originMode, originPoint, selectedPlace, selectionTarget]);
 
   const originForRequest =
     originMode === "gps" && currentLocation
@@ -354,12 +327,16 @@ export default function RouteView() {
       return routeInfo.path;
     }
 
+    if (!hasSearched) {
+      return [];
+    }
+
     // Otherwise, only fit bounds to the static recommendation places.
     // We explicitly exclude originPoint, destinationPoint, and currentLocation here
     // to prevent the map from annoyingly zooming out (fitBounds) when the user
     // manually picks or confirms a point on the map.
     return (recommendationPlaces || []).filter((p) => !p._isTemporaryMapSelection);
-  }, [recommendationPlaces, routeInfo]);
+  }, [hasSearched, recommendationPlaces, routeInfo]);
 
   if (!canUseRoute) {
     return (
@@ -388,10 +365,10 @@ export default function RouteView() {
 
     // Optimistic UI update
     const fallbackPlace = buildTemporaryMapPlace(point);
-    setRecommendationPlaces((previousPlaces) => [
-      fallbackPlace,
-      ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
-    ]);
+    setRecommendationPlaces((previousPlaces) => {
+      const cleared = previousPlaces.filter((place) => !place._isTemporaryMapSelection);
+      return [fallbackPlace, ...cleared];
+    });
     setSelectedPopupPlaceId(fallbackPlace.id);
     setLocationNotice(
       target === "origin"
@@ -404,18 +381,19 @@ export default function RouteView() {
         latitude: point.latitude,
         longitude: point.longitude,
       });
-      // recommendationPlaces might be stale in closure, rely on functional updates
-      const alreadyListed = recommendationPlaces.some((place) => place.id === resolvedPlace.id);
-      const previewPlace = {
-        ...resolvedPlace,
-        _isTemporaryMapSelection: !alreadyListed,
-      };
-
-      setRecommendationPlaces((previousPlaces) => [
-        previewPlace,
-        ...previousPlaces.filter((place) => place.id !== resolvedPlace.id && place.id !== fallbackPlace.id),
-      ]);
-      setSelectedPopupPlaceId((prevId) => prevId === fallbackPlace.id ? previewPlace.id : prevId);
+      
+      setRecommendationPlaces((previousPlaces) => {
+        const filtered = previousPlaces.filter(
+          (place) => !place._isTemporaryMapSelection && place.id !== resolvedPlace.id && place.id !== fallbackPlace.id
+        );
+        const alreadyListed = previousPlaces.some((place) => place.id === resolvedPlace.id);
+        const previewPlace = {
+          ...resolvedPlace,
+          _isTemporaryMapSelection: !alreadyListed,
+        };
+        return [previewPlace, ...filtered];
+      });
+      setSelectedPopupPlaceId((prevId) => prevId === fallbackPlace.id ? resolvedPlace.id : prevId);
     } catch (error) {
       console.error("Failed to resolve clicked point", error);
       // Fallback is already showing
@@ -446,6 +424,9 @@ export default function RouteView() {
   async function handleConfirmMapSelection(place) {
     setSelectedPopupPlaceId(place.id);
     const resolvedPoint = coordinatePointFromPlace(place);
+    if (resolvedPoint) {
+      setMapCenter(resolvedPoint);
+    }
 
     if (selectionTarget === "origin") {
       setOriginMode("manual");
@@ -468,6 +449,13 @@ export default function RouteView() {
       recordPlacePick(place.id).catch((error) => {
         console.error("Failed to record place pick", error);
       });
+    }
+
+    let destination = null;
+    try {
+      destination = buildRouteDestinationFromMapPick(place);
+    } catch (error) {
+      console.warn("Could not build destination payload:", error);
     }
 
     setSelectedPlace(place._isLocalOnly ? null : destination);
@@ -548,6 +536,7 @@ export default function RouteView() {
     try {
       const browserLocation = await getCurrentBrowserLocation();
       setCurrentLocation(browserLocation);
+      setMapCenter(browserLocation);
       setOriginMode("gps");
       setOriginPoint(null);
       setOriginInput("");
@@ -573,6 +562,7 @@ export default function RouteView() {
           followPosition={navController.gpsPosition}
           center={navController.gpsPosition || mapCenter}
           zoom={17}
+          onRecenter={(pos) => setMapCenter(pos)}
         >
           {routeInfo?.steps?.length ? (
             <RouteMap
@@ -618,6 +608,9 @@ export default function RouteView() {
                 onClick={() => {
                   setOriginMode("gps");
                   setSelectedPopupPlaceId(null);
+                  if (currentLocation) {
+                    setMapCenter(currentLocation);
+                  }
                 }}
               >
                 Use GPS
@@ -630,6 +623,9 @@ export default function RouteView() {
                   setOriginMode("manual");
                   setSelectionTarget("origin");
                   setLocationNotice("Map is ready to confirm the next picked point as your start point.");
+                  if (originPoint) {
+                    setMapCenter(originPoint);
+                  }
                 }}
               >
                 Pick on map
@@ -641,6 +637,9 @@ export default function RouteView() {
                 onClick={() => {
                   setOriginMode("manual");
                   setSelectedPopupPlaceId(null);
+                  if (originPoint) {
+                    setMapCenter(originPoint);
+                  }
                 }}
               >
                 Enter manually
@@ -686,6 +685,9 @@ export default function RouteView() {
                 onClick={() => {
                   setSelectionTarget("destination");
                   setLocationNotice("Map is ready to confirm the next picked point as your destination.");
+                  if (destinationPoint) {
+                    setMapCenter(destinationPoint);
+                  }
                 }}
               >
                 Pick on map
@@ -694,7 +696,12 @@ export default function RouteView() {
                 type="button"
                 className="btn-outline"
                 style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
-                onClick={() => setSelectionTarget("destination")}
+                onClick={() => {
+                  setSelectionTarget("destination");
+                  if (destinationPoint) {
+                    setMapCenter(destinationPoint);
+                  }
+                }}
               >
                 Pick place marker
               </button>
@@ -790,6 +797,7 @@ export default function RouteView() {
           zoom={13}
           onMapClick={handleMapClick}
           fitBoundsPoints={routeFitBoundsPoints}
+          onRecenter={(pos) => setMapCenter(pos)}
         >
           {recommendationPlaces?.length ? (
             <MarkerList

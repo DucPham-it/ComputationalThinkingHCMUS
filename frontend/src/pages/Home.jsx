@@ -57,7 +57,9 @@ export default function Home() {
     const {
         currentLocation,
         setCurrentLocation,
-        setRecommendationPlaces
+        setRecommendationPlaces,
+        hasSearched,
+        setHasSearched,
     } = useApp();
     const [query, setQuery] = useState("");
     const [places, setPlaces] = useState([]);
@@ -70,9 +72,6 @@ export default function Home() {
     const [hasMore, setHasMore] = useState(false);
     const [nextOffset, setNextOffset] = useState(null);
     const [lastSearchParams, setLastSearchParams] = useState(null);
-    
-    // State UX để đổi tiêu đề khi đã thực hiện tìm kiếm
-    const [hasSearched, setHasSearched] = useState(false);
     
     // Ref dùng để tự động cuộn màn hình xuống kết quả tìm kiếm
     const resultsRef = useRef(null);
@@ -208,11 +207,9 @@ export default function Home() {
     }
 
     // --- Effects ---
-    // Lấy GPS lần đầu
     useEffect(() => {
         let active = true;
         async function hydrateLocation() {
-            if (currentLocation) return;
             try {
                 const location = await getCurrentBrowserLocation();
                 if (!active) return;
@@ -220,12 +217,14 @@ export default function Home() {
                 setLocationStatus("Using your GPS as the default starting point.");
             } catch {
                 if (!active) return;
-                setLocationStatus("GPS is unavailable. You can still search and enter a manual route start.");
+                if (!currentLocation) {
+                    setLocationStatus("GPS is unavailable. You can still search and enter a manual route start.");
+                }
             }
         }
         hydrateLocation();
         return () => { active = false; };
-    }, [currentLocation, setCurrentLocation]);
+    }, [setCurrentLocation]);
 
     // Reset khi logout
     useEffect(() => {

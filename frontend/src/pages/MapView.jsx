@@ -138,18 +138,21 @@ export default function MapView({ places = [] }) {
         recommendationPlaces,
         setRecommendationPlaces,
         setSelectedPlace: setPickedPlace,
+        hasSearched,
     } = useApp();
-    const [mapCenter, setMapCenter] = useState({ latitude: 10.7769, longitude: 106.7009 });
+    const [mapCenter, setMapCenter] = useState(() => currentLocation || { latitude: 10.7769, longitude: 106.7009 });
     const [selectedPlaceId, setSelectedPlaceId] = useState(null);
     const [requestTargetPlace, setRequestTargetPlace] = useState(null);
     const mapPlaces = useMemo(
         () => mergePlacesByKey(recommendationPlaces, places),
         [places, recommendationPlaces]
     );
-    const mapFitBoundsPoints = useMemo(
-        () => [currentLocation, ...mapPlaces.filter(p => !p._isTemporaryMapSelection)].filter(Boolean),
-        [currentLocation, mapPlaces]
-    );
+    const mapFitBoundsPoints = useMemo(() => {
+        if (!hasSearched) {
+            return [];
+        }
+        return mapPlaces.filter(p => !p._isTemporaryMapSelection);
+    }, [hasSearched, mapPlaces]);
 
     function mergePlaces(nextPlace) {
         const mergedPlaces = mergePlacesByKey([nextPlace], mapPlaces);
@@ -182,11 +185,6 @@ export default function MapView({ places = [] }) {
         let active = true;
 
         async function hydrateLocation() {
-            if (currentLocation) {
-                setMapCenter(currentLocation);
-                return;
-            }
-
             try {
                 const userPos = await getCurrentBrowserLocation();
                 if (!active) return;
@@ -201,7 +199,7 @@ export default function MapView({ places = [] }) {
         return () => {
             active = false;
         };
-    }, [currentLocation, setCurrentLocation]);
+    }, [setCurrentLocation]);
 
     // when select a place
     const handlePlaceSelect = (place) => {
@@ -263,37 +261,32 @@ export default function MapView({ places = [] }) {
     }
 
     async function handleMapClick(point) {
-        // Optimistically show a fallback/temporary point to avoid UI delay
+        // Clear any existing temporary map selection pins first to prevent clutter
         const fallbackPlace = buildTemporaryMapPlace(point);
-        mergePlaces(fallbackPlace);
+        setRecommendationPlaces((prevPlaces) => {
+            const cleared = prevPlaces.filter((item) => !item._isTemporaryMapSelection);
+            return [fallbackPlace, ...cleared];
+        });
         setSelectedPlaceId(fallbackPlace.id);
-        // Do not call setMapCenter(point) here so the map stays fixed
 
         try {
             const resolvedPlace = await resolvePlaceFromCoordinates({
                 latitude: point.latitude,
                 longitude: point.longitude,
             });
-            const alreadyListed = mapPlaces.some((place) => place.id === resolvedPlace.id);
-            const previewPlace = {
-                ...resolvedPlace,
-                _isTemporaryMapSelection: !alreadyListed,
-            };
-
-            // Replace the optimistic temp place with the resolved one
+            
             setRecommendationPlaces((prevPlaces) => {
-                const filtered = prevPlaces.filter((item) => item.id !== fallbackPlace.id);
-                return mergePlacesByKey([previewPlace], filtered);
+                const filtered = prevPlaces.filter(
+                    (item) => item.id !== fallbackPlace.id && !item._isTemporaryMapSelection
+                );
+                const alreadyListed = mapPlaces.some((place) => place.id === resolvedPlace.id);
+                const previewPlace = {
+                    ...resolvedPlace,
+                    _isTemporaryMapSelection: !alreadyListed,
+                };
+                return [previewPlace, ...filtered];
             });
-            setSelectedPlaceId((prevId) => (prevId === fallbackPlace.id ? previewPlace.id : prevId));
-
-            // Do not call setMapCenter here so the map stays fixed
-            if (
-                typeof resolvedPlace.latitude === "number" &&
-                typeof resolvedPlace.longitude === "number"
-            ) {
-                // setMapCenter is intentionally omitted to prevent map from jumping
-            }
+            setSelectedPlaceId((prevId) => (prevId === fallbackPlace.id ? resolvedPlace.id : prevId));
         } catch (error) {
             console.error("Failed to resolve clicked point", error);
             // Fallback is already showing, nothing to do
@@ -318,6 +311,7 @@ export default function MapView({ places = [] }) {
                 zoom={13}
                 onMapClick={handleMapClick}
                 fitBoundsPoints={mapFitBoundsPoints}
+                onRecenter={(pos) => setMapCenter(pos)}
             >
                 {currentLocation ? (
                     <CircleMarker

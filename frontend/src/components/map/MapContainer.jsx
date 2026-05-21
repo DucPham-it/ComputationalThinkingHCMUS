@@ -4,7 +4,9 @@
  */
 
 import { MapContainer as LeafletMapContainer, TileLayer, useMap, useMapEvents, ZoomControl } from "react-leaflet";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Navigation } from "lucide-react";
+import { useApp } from "../../hooks/useApp";
 
 const mapContainerStyle = {
   width: "100%",
@@ -156,6 +158,135 @@ function NavigationFollower({ followPosition, navigationMode }) {
   return null;
 }
 
+// Locate/Recenter control button component
+function LocateControl({ followPosition, onRecenter, navigationMode }) {
+  const map = useMap();
+  const { currentLocation, setCurrentLocation } = useApp();
+  const [hovered, setHovered] = useState(false);
+
+  const handleLocate = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    // Luôn ưu tiên quét vị trí mới với độ chính xác cao từ thiết bị
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          
+          if (latitude == null || longitude == null || isNaN(latitude) || isNaN(longitude)) {
+            console.error("Browser returned invalid coordinates:", latitude, longitude);
+            alert("Trình duyệt trả về tọa độ không hợp lệ.");
+            return;
+          }
+
+          // Hiển thị tọa độ nhận được để người dùng kiểm tra xem có bị sai lệch từ nguồn (nhà mạng/thiết bị) không
+          alert(`Định vị thành công từ thiết bị!\n- Vĩ độ (Latitude): ${latitude}\n- Kinh độ (Longitude): ${longitude}\n\n(Lưu ý: Nếu tọa độ trên chỉ ra biển, có thể do trình duyệt/nhà mạng ước lượng sai vị trí IP hoặc thiết bị đang bật VPN/giả lập vị trí).`);
+
+          const freshLoc = { latitude, longitude };
+          
+          if (setCurrentLocation) {
+            setCurrentLocation(freshLoc);
+          }
+          
+          map.setView([latitude, longitude], 17, { animate: true });
+          if (onRecenter) {
+            onRecenter(freshLoc);
+          }
+        },
+        (error) => {
+          console.warn("Locate Control: Fresh geolocation failed, using fallback:", error);
+          
+          // Dự phòng (fallback): Sử dụng vị trí lưu trong cache hoặc vị trí dẫn đường nếu lấy GPS mới thất bại
+          const target = followPosition || currentLocation;
+          if (target) {
+            const lat = target.latitude ?? target.lat;
+            const lng = target.longitude ?? target.lng;
+            if (lat != null && lng != null) {
+              map.setView([lat, lng], 17, { animate: true });
+              if (onRecenter) {
+                onRecenter({ latitude: lat, longitude: lng });
+              }
+              return;
+            }
+          }
+          
+          alert("Không thể lấy vị trí hiện tại của bạn. Vui lòng kiểm tra quyền truy cập vị trí trong cài đặt hệ thống và trình duyệt.");
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0, // Ép trình duyệt quét vị trí mới thay vì dùng cache của nó
+        }
+      );
+    } else {
+      // Dự phòng nếu trình duyệt không hỗ trợ Geolocation API
+      const target = followPosition || currentLocation;
+      if (target) {
+        const lat = target.latitude ?? target.lat;
+        const lng = target.longitude ?? target.lng;
+        if (lat != null && lng != null) {
+          map.setView([lat, lng], 17, { animate: true });
+          if (onRecenter) {
+            onRecenter({ latitude: lat, longitude: lng });
+          }
+          return;
+        }
+      }
+      alert("Trình duyệt của bạn không hỗ trợ định vị GPS.");
+    }
+  };
+
+  const bottomPosition = navigationMode ? "10px" : "80px";
+
+  const buttonStyle = {
+    position: "absolute",
+    bottom: bottomPosition,
+    right: "10px",
+    zIndex: 1000,
+    width: "34px",
+    height: "34px",
+    borderRadius: "4px",
+    backgroundColor: hovered ? "#f4f4f4" : "#ffffff",
+    border: "2px solid rgba(0,0,0,0.2)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    transition: "background-color 0.2s, transform 0.1s",
+    outline: "none",
+    padding: 0,
+    boxSizing: "border-box",
+  };
+
+  return (
+    <button
+      onClick={handleLocate}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onMouseDown={(e) => {
+        e.currentTarget.style.transform = "scale(0.95)";
+      }}
+      onMouseUp={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+      style={buttonStyle}
+      title="Move map to current location"
+      type="button"
+    >
+      <Navigation
+        size={16}
+        style={{
+          transform: "rotate(45deg)",
+          color: hovered ? "var(--color-primary, #2563eb)" : "#333333",
+          fill: hovered ? "rgba(37, 99, 235, 0.15)" : "none",
+          transition: "color 0.2s, fill 0.2s",
+        }}
+      />
+    </button>
+  );
+}
+
 // TODO: [NGƯỜI 6 - SỬA] Thêm props navigationMode + followPosition. Navigation mode: height 100vh, zoom 17, ẩn zoom control, disable MapUpdater/MapBoundsUpdater
 export default function MapContainer({
   children,
@@ -166,6 +297,7 @@ export default function MapContainer({
   mapContainerClassName = "",
   navigationMode = false,
   followPosition = null,
+  onRecenter = null,
 }) {
   const resolvedCenter = center || defaultCenter;
   const effectiveZoom = navigationMode ? NAVIGATION_ZOOM : zoom;
@@ -194,6 +326,11 @@ export default function MapContainer({
         <MapClickHandler onMapClick={onMapClick} />
         <NavigationFollower
           followPosition={followPosition}
+          navigationMode={navigationMode}
+        />
+        <LocateControl
+          followPosition={followPosition}
+          onRecenter={onRecenter}
           navigationMode={navigationMode}
         />
         {children}

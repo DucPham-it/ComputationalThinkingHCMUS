@@ -17,53 +17,168 @@ Purpose:
 - produce a normalized search plan for local DB search and external fallback
 """
 
+# ============================================================
+# TODO (Future Improvements for NLP Parser - F2)
+# ============================================================
+
+# 1. Replace rule-based parsing with ML/NLP model
+# ------------------------------------------------------------
+# Current implementation uses rule-based keyword matching.
+# In future, this can be upgraded to:
+# - Intent classification model (e.g., BERT, PhoBERT)
+# - Named Entity Recognition (NER) for extracting fields
+# This will improve:
+# - Accuracy with complex sentences
+# - Better handling of ambiguous queries
+# - Reduced reliance on manual keyword lists
+
+
+# 2. Improve multilingual support
+# ------------------------------------------------------------
+# Currently supports:
+# - Vietnamese (with/without accents)
+# - Basic English keywords
+# Future improvements:
+# - Full English support (synonyms, grammar variations)
+# - Mixed-language query understanding (VN + EN)
+# - Slang normalization (e.g., "cheap cheap", "xịn xịn")
+
+
+# 3. Context-aware parsing (conversation memory)
+# ------------------------------------------------------------
+# Current parser handles only single-turn queries.
+# Future:
+# - Maintain user context across multiple queries
+# Example:
+#   User: "cafe gần đây"
+#   User: "cho cặp đôi"
+# → Combine into one structured request
+
+
+# 4. Smarter keyword extraction
+# ------------------------------------------------------------
+# Current keywords are filtered using STOP_WORDS and regex.
+# Future:
+# - Use TF-IDF or embedding-based keyword extraction
+# - Remove semantic noise automatically
+# - Support fuzzy matching (typo tolerance)
+
+
+# 5. Better confidence scoring
+# ------------------------------------------------------------
+# Current confidence is rule-based scoring.
+# Future:
+# - Train a confidence model based on prediction certainty
+# - Calibrate score using real user data
+# - Distinguish between "partial match" vs "strong match"
+
+
+# 6. Advanced negation handling
+# ------------------------------------------------------------
+# Current support:
+# - "không", "không cần"
+# Future:
+# - Handle complex negation:
+#   "không quá xa", "không quá đắt"
+# - Scope-aware negation (which field is affected)
+
+
+# 7. Expand domain knowledge
+# ------------------------------------------------------------
+# Add more categories:
+# - Nightlife, gym, spa, cinema, coworking space
+# - Food types: BBQ, vegetarian, street food
+# - Activity types: hiking, picnic, dating spots
+
+
+# 8. Location understanding improvement
+# ------------------------------------------------------------
+# Current:
+# - Basic extraction: "quận 1", "district 7"
+# Future:
+# - Integrate with geocoding API
+# - Normalize locations (e.g., "Q1" → "Quận 1")
+# - Support landmarks (e.g., "gần Bitexco")
+
+
+# 9. Time understanding enhancement
+# ------------------------------------------------------------
+# Current:
+# - morning, afternoon, evening
+# Future:
+# - Handle:
+#   "cuối tuần", "ngày mai", "tối thứ 7"
+# - Convert to actual datetime ranges
+
+
+# 10. Personalization support
+# ------------------------------------------------------------
+# Future:
+# - Adapt parsing based on user preferences
+# - Example:
+#   If user often chooses "cafe yên tĩnh" → boost relevance
+
+
+# 11. Error handling & fallback strategy
+# ------------------------------------------------------------
+# Returns "unknown" intent for unclear queries
+# Future:
+# - Suggest clarification questions
+# - Provide fallback recommendations
+
+
+# 12. Logging & analytics
+# ------------------------------------------------------------
+# Future:
+# - Log user queries for analysis
+# - Improve keyword dictionary based on real usage
+# - Detect frequently failed parses
+
+
+# ============================================================
+
 from __future__ import annotations
 
 import re
 import unicodedata
 
+# ĐÃ CHỈNH SƠ QUA 7 HÀM NGAY BÊN DƯỚI
 
 ENTERTAINMENT_PATTERNS: dict[str, tuple[str, ...]] = {
     "restaurant": (
-        "ăn",
-        "an",
-        "quán ăn",
-        "quan an",
-        "nhà hàng",
-        "nha hang",
-        "restaurant",
-        "food",
-        "đồ ăn",
-        "do an",
+        "ăn", "an", "eat",
+        "quán ăn", "quan an", "restaurant",
+        "nhà hàng", "nha hang", "dining",
+        "đồ ăn", "do an", "food",
+        "ăn uống", "an uong", "meal"
     ),
+
     "cafe": (
-        "cafe",
-        "coffee",
-        "quán cafe",
-        "quan cafe",
-        "quán cà phê",
-        "quan ca phe",
-        "cà phê",
-        "ca phe",
+        "cà phê", "ca phe", "coffee",
+        "quán cafe", "quan cafe", "cafe",
+        "tiệm cafe", "tiem cafe", "coffee shop",
+        "chill"
     ),
+
     "movie_theater": (
-        "rạp",
-        "rap",
-        "cinema",
-        "movie",
-        "phim",
-        "chiếu phim",
-        "chieu phim",
+        "rạp phim", "rap phim", "cinema",
+        "xem phim", "movie"
     ),
-    "park": ("công viên", "cong vien", "park"),
+
+    "park": (
+        "công viên", "cong vien", "park",
+        "đi dạo", "di dao", "walk"
+    ),
+
     "mall": (
-        "trung tâm thương mại",
-        "trung tam thuong mai",
-        "shopping mall",
-        "mall",
+        "trung tâm thương mại", "trung tam thuong mai", "mall",
+        "mua sắm", "mua sam", "shopping"
     ),
-    "museum": ("bảo tàng", "bao tang", "museum"),
-    "hotel": ("khách sạn", "khach san", "hotel"),
+
+    "hotel": (
+        "khách sạn", "khach san", "hotel",
+        "nghỉ dưỡng", "nghi duong", "resort"
+    ),
 }
 
 ENTERTAINMENT_LABELS: dict[str, str] = {
@@ -77,23 +192,68 @@ ENTERTAINMENT_LABELS: dict[str, str] = {
 }
 
 BUDGET_PATTERNS: dict[str, tuple[str, ...]] = {
-    "low": ("rẻ", "re", "cheap", "tiết kiệm", "tiet kiem", "bình dân", "binh dan"),
-    "medium": ("vừa túi tiền", "vua tui tien", "tam tam", "average"),
-    "high": ("sang", "luxury", "cao cấp", "cao cap", "premium", "expensive", "high-end"),
+    "low": (
+        "rẻ", "re", "cheap", "tiết kiệm", "tiet kiem", "bình dân", "binh dan", "budget", "giá rẻ", "gia re", "low price", "saving"
+    ),
+    "medium": (
+        "vừa túi tiền", "vua tui tien", "tam tam", "average", "vừa", "vua", "moderate", "tầm trung", "tam trung", "mid range", "ổn", "ok", "oke", "okey", "oki", "okii", "okay"
+    ),
+    "high": (
+        "sang", "luxury", "cao cấp", "cao cap", "premium", "expensive", "high-end", "đắt", "dat", "mắc", "mac", "pricey", "sang trọng", "sang trong", "đắt đỏ"
+    ),
 }
 
 COMPANION_PATTERNS: dict[str, tuple[str, ...]] = {
-    "couple": ("2 người", "hai người", "couple", "hẹn hò", "hen ho", "cặp đôi", "cap doi"),
-    "family": ("gia đình", "gia dinh", "family"),
-    "friends": ("bạn bè", "ban be", "friends", "team"),
-    "solo": ("một mình", "mot minh", "solo", "alone"),
+    "solo": (
+        "một mình", "mot minh", "alone", "solo"
+    ),
+    "couple": (
+        "cặp đôi", "cap doi", "couple", "người yêu", "nguoi yeu", "lover", "hẹn hò", "hen ho", "dating", "2 người", "hai người"
+    ),
+    "family": (
+        "gia đình", "gia dinh", "family", "trẻ em", "tre em", "kids", "cha mẹ", "cha me", "parents"
+    ),
+    "friends": (
+        "bạn bè", "ban be", "friends", "nhóm", "nhom", "group", "team", "hội bạn", "hoi ban", "crew"
+    ),
 }
 
 TIME_PATTERNS: dict[str, tuple[str, ...]] = {
-    "morning": ("sáng", "sang", "morning", "breakfast"),
-    "afternoon": ("chiều", "chieu", "afternoon"),
-    "evening": ("tối", "toi", "evening", "dinner"),
-    "night": ("đêm", "dem", "night", "late night"),
+    "morning": (
+        "sáng", "morning",
+        "buổi sáng", "buoi sang", "early",
+        "sáng nay", "sang nay",
+    ),
+
+    "afternoon": (
+        "trưa", "trua", "noon",
+        "chiều", "chieu", "afternoon"
+    ),
+
+    "evening": (
+        "tối", "evening",
+        "đêm", "dem", "night",
+        "tối nay", "toi nay", "tonight", "overnight",
+        "đêm nay", "dem nay",
+    ),
+    "weekend": (
+        "cuoi tuan", "cuối tuần", "weekend"
+    ),
+
+    "tomorrow": (
+        "ngay mai", "ngày mai", "tomorrow"
+    ),
+}
+
+DISTANCE_KEYWORDS = {
+    "near": (
+        "gần", "gan", "near",
+        "gần đây", "gan day", "nearby"
+    ),
+    "far": (
+        "xa", "far",
+        "xa quá", "xa qua", "far away"
+    )
 }
 
 STOP_WORDS = {
@@ -140,6 +300,32 @@ STOP_WORDS = {
     "around",
     "place",
     "places",
+    "trên", 
+    "tren",
+    "sao",
+    "nay",
+    "là", 
+    "la",
+    "buoi",
+    "ban",
+    "muon",
+    "mot",
+    "gi",
+    "do",
+    "đo",
+    "vui",
+    "tron",
+    "ven",
+    "ton",
+    "tai",
+    "on",
+    "dinh",
+    "me",
+    "for",
+    "friendly",
+    "uh",
+    "uhm",
+    "um",
 }
 
 
@@ -159,17 +345,48 @@ def _normalize_text(text: str) -> str:
 
 
 def _contains_any(text: str, patterns: tuple[str, ...]) -> bool:
-    return any(
-        re.search(rf"(?<!\w){re.escape(pattern)}(?!\w)", text) is not None
-        for pattern in patterns
-    )
+    words = text.split()
+    for p in patterns:
+        p_words = p.split()
+
+        # check multi-word phrase
+        for i in range(len(words) - len(p_words) + 1):
+            if words[i:i+len(p_words)] == p_words:
+                return True
+
+    return False
+
+
+def _match_phrase(text: str, phrase: str) -> bool:
+    words = text.split()
+    p_words = phrase.split()
+
+    for i in range(len(words) - len(p_words) + 1):
+        if words[i:i+len(p_words)] == p_words:
+            return True
+    return False
 
 
 def _extract_first_match(text: str, pattern_map: dict[str, tuple[str, ...]]) -> str | None:
+    matches = []
+
     for label, patterns in pattern_map.items():
-        if _contains_any(text, patterns):
-            return label
-    return None
+        for p in patterns:
+            p_clean = p.lower().strip()
+
+            if not p_clean:
+                continue
+
+            # chỉ match trực tiếp, KHÔNG normalize pattern
+            if _match_phrase(text, p_clean):
+                matches.append((label, p_clean))
+
+    if not matches:
+        return None
+
+    matches.sort(key=lambda x: len(x[1]), reverse=True)
+
+    return matches[0][0]
 
 
 def _collect_intent_tokens(*pattern_groups: tuple[str, ...]) -> set[str]:
@@ -306,6 +523,7 @@ def parse_recommendation_language_contract(query: str) -> dict:
     - Keep parse_search_text backward-compatible.
     - Keep output values aligned with backend filter contracts.
     """
+    # ===== 1. handle empty =====
     if not query or not query.strip():
         return {
             "intent": "unknown",
@@ -322,97 +540,157 @@ def parse_recommendation_language_contract(query: str) -> dict:
             "missing_fields": [],
         }
 
+    # ===== 2. base parsing =====
     base = parse_search_text(query)
-    text = base["normalized_query"]
+    text = base.get("normalized_query", "")
 
-    def contains_phrase(*phrases: str) -> bool:
+    # ===== helper: match phrase đúng word =====
+    def contains_phrase(text: str, phrases: tuple[str, ...]) -> bool:
+        return any(re.search(rf"\b{re.escape(p)}\b", text) for p in phrases)
+
+    # ===== helper: NEGATION =====
+    def is_negated(text: str, keyword: str) -> bool:
         return any(
-            re.search(rf"(?<!\w){re.escape(_normalize_text(phrase))}(?!\w)", text) is not None
-            for phrase in phrases
+            phrase in text
+            for phrase in [
+                f"khong {keyword}",
+                f"khong can {keyword}",
+                f"khong muon {keyword}",
+                f"khong thich {keyword}",
+            ]
         )
 
-    def is_negated(keyword: str) -> bool:
-        normalized_keyword = _normalize_text(keyword)
-        negation_phrases = (
-            f"khong {normalized_keyword}",
-            f"khong can {normalized_keyword}",
-            f"khong muon {normalized_keyword}",
-            f"khong thich {normalized_keyword}",
-        )
-        return any(phrase in text for phrase in negation_phrases)
+    # ===== 3. DISTANCE =====
+    distance_hint_km = None
 
-    distance_hint_km: float | None = None
-    distance_match = re.search(r"(\d+(?:\.\d+)?)\s*km", text)
-    if distance_match:
-        distance_hint_km = float(distance_match.group(1))
-    elif contains_phrase("gan day", "gan toi", "gan day", "nearby", "near me") and not is_negated("gan"):
-        distance_hint_km = 3.0
-    elif contains_phrase("rat gan", "gan") and not is_negated("gan"):
-        distance_hint_km = 5.0
+    match_km = re.search(r"(\d+)\s*km", text)
 
-    min_rating: float | None = None
-    rating_match = re.search(r"(\d(?:\.\d)?)\s*sao", text)
+    if match_km:
+        value = int(match_km.group(1))
+
+        if contains_phrase(text, ("tren", "hon")):
+            distance_hint_km = value + 1
+
+        elif contains_phrase(text, ("duoi", "nho hon")):
+            distance_hint_km = max(0, value - 1)
+
+        elif contains_phrase(text, ("khong qua",)):
+            distance_hint_km = value
+
+        elif contains_phrase(text, ("khoang", "tam")):
+            distance_hint_km = value
+
+        else:
+            distance_hint_km = value
+
+    if distance_hint_km is None:
+        if contains_phrase(text, DISTANCE_KEYWORDS["near"]) and not is_negated(text, "gan"):
+            distance_hint_km = 1
+        elif contains_phrase(text, DISTANCE_KEYWORDS["far"]) and not is_negated(text, "xa"):
+            distance_hint_km = 10
+        elif match_km and contains_phrase(text, ("duoi", "nho hon")):
+            distance_hint_km = max(0, value - 1)
+
+        elif match_km and contains_phrase(text, ("khong qua",)):
+            distance_hint_km = value
+
+    # ===== 4. RATING =====
+    min_rating = None
+    rating_match = re.search(r"(\d(\.\d)?)\s*sao", text)
     if rating_match:
-        min_rating = min(5.0, max(0.0, float(rating_match.group(1))))
+        try:
+            min_rating = float(rating_match.group(1))
+        except ValueError:
+            pass
 
-    require_open_now = contains_phrase(
-        "dang mo",
-        "mo cua",
-        "con mo",
-        "open now",
-        "available now",
-    )
+    # ===== 5. OPEN NOW =====
+    require_open_now = contains_phrase(text, (
+        "dang mo", "mo cua", "open now", "con mo", "available"
+    ))
 
+    # ===== 6. LOCATION =====
     location_hint = None
-    location_match = re.search(r"\b(?:quan|district)\s*\d+\b", text)
-    if location_match:
-        location_hint = location_match.group(0)
 
+    match_quan = re.search(r"quan\s*\d+", text)
+    if match_quan:
+        location_hint = match_quan.group(0)
+    else:
+        match_district = re.search(r"district\s*\d+", text)
+        if match_district:
+            location_hint = match_district.group(0)
+
+    # ===== 7. BUDGET  =====
     budget_level = base.get("budget_level")
-    if is_negated("re") or is_negated("dat") or is_negated("cao cap"):
+
+    if is_negated(text, "re") or is_negated(text, "dat"):
         budget_level = None
 
-    keywords = [
-        token
-        for token in base.get("content_terms", [])
-        if token not in {"khong", "can", "muon", "gan", "xa", "sao", "km"}
-    ]
+    # ===== 8. KEYWORDS CLEAN =====
+    keywords = list(set([
+        k for k in base.get("content_terms", [])
+        if (k not in STOP_WORDS or k in {"choi"})
+        and len(k) >= 2
+        and k not in {"khong", "can", "gi", "do", "xa", "gan"}
+    ]))
 
-    signal_count = sum(
-        1
-        for value in (
-            base.get("entertainment_type"),
-            budget_level,
-            base.get("companion_type"),
-            base.get("time_slot"),
-            distance_hint_km,
-            require_open_now,
-            min_rating,
-            location_hint,
-            keywords,
-        )
-        if value
-    )
-    confidence = round(min(1.0, 0.25 + signal_count * 0.12), 2)
+    # ===== 9. CONFIDENCE =====
+    score = 0
 
-    if base.get("entertainment_type") == "restaurant":
-        intent = "find_food"
-    elif base.get("entertainment_type"):
-        intent = "find_activity"
-    elif contains_phrase("tim", "goi y", "suggest", "recommend"):
-        intent = "recommend_place"
-    elif keywords:
-        intent = "recommend_place"
-    else:
-        intent = "unknown"
+    if base.get("entertainment_type"):
+        score += 1
+    if budget_level:
+        score += 1
+    if base.get("companion_type"):
+        score += 1
+    if base.get("time_slot"):
+        score += 1
+    if distance_hint_km is not None:
+        score += 1
+    if min_rating is not None:
+        score += 1
+    if require_open_now:
+        score += 1
+    if contains_phrase(text, ("muon",)):
+        score += 1
 
-    missing_fields: list[str] = []
+    confidence = round(min(1.0, 0.3 + score * 0.12), 2)
+
+    # ===== 10. MISSING FIELDS =====
+    missing_fields = []
+
     if not base.get("entertainment_type"):
         missing_fields.append("entertainment_type")
-    if signal_count >= 2 and distance_hint_km is None:
+
+    if distance_hint_km is None and score >= 2:
         missing_fields.append("distance")
-    if signal_count >= 2 and base.get("time_slot") is None:
+
+    if not base.get("time_slot") and score >= 2:
         missing_fields.append("time")
+
+    # ===== 11. RETURN =====
+    if base.get("entertainment_type") == "restaurant":
+        intent = "find_food"
+
+    elif base.get("entertainment_type"):
+        intent = "find_activity"
+
+    elif contains_phrase(text, ("di choi", "choi", "hang out", "relax")):
+        intent = "find_activity"
+
+    elif contains_phrase(text, ("di",)) and not keywords:
+        intent = "find_activity"
+
+    elif len(text.strip()) <= 2:
+        intent = "unknown"
+
+    elif keywords:
+        intent = "recommend_place"
+
+    elif contains_phrase(text, ("tim", "cho", "goi y", "suggest", "recommend")):
+        intent = "recommend_place"
+
+    else:
+        intent = "unknown"
 
     return {
         "intent": intent,
@@ -424,7 +702,7 @@ def parse_recommendation_language_contract(query: str) -> dict:
         "distance_hint_km": distance_hint_km,
         "require_open_now": require_open_now,
         "min_rating": min_rating,
-        "keywords": _unique(keywords),
+        "keywords": keywords,
         "confidence": confidence,
         "missing_fields": missing_fields,
     }
@@ -456,22 +734,28 @@ def extract_filter_fields_from_text(query: str) -> dict:
     Merge rule:
     - UI filters win over NLP fields when both are present.
     """
+    if not query or not query.strip():
+        return {}
+
     parsed = parse_recommendation_language_contract(query)
-    fields = {
+
+    filters = {
         "max_distance_km": parsed.get("distance_hint_km"),
         "min_rating": parsed.get("min_rating"),
         "budget_level": parsed.get("budget_level"),
-        "preferred_types": [parsed["entertainment_type"]] if parsed.get("entertainment_type") else None,
+        "preferred_types": None,
         "require_open_now": parsed.get("require_open_now"),
         "companion_type": parsed.get("companion_type"),
         "time_slot": parsed.get("time_slot"),
     }
-    extracted_fields: dict[str, object] = {}
-    for key, value in fields.items():
-        if value is None or value is False:
-            continue
-        if value == "" or value == []:
-            continue
-        extracted_fields[key] = value
 
-    return extracted_fields
+    # convert type → list
+    if parsed.get("entertainment_type"):
+        filters["preferred_types"] = [parsed["entertainment_type"]]
+
+    # remove None, False, empty strings, and empty lists
+    return {
+        k: v
+        for k, v in filters.items()
+        if v is not None and v is not False and v != "" and v != []
+    }

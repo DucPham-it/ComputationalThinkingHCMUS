@@ -37,7 +37,8 @@ const NavigationPanel = ({
 
   const playTTS = (text) => {
     // Gọi API gTTS ở backend (đảm bảo ra đúng giọng chị Google)
-    const url = `http://localhost:8000/api/v1/tts?text=${encodeURIComponent(text)}`;
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+    const url = `${apiBase}/tts?text=${encodeURIComponent(text)}`;
     const audio = new Audio(url);
     
     // Cố gắng phát âm thanh

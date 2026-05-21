@@ -96,7 +96,8 @@ export default function useNavigationController(config = {}) {
    */
   const playVoice = useCallback((text) => {
     if (!text) return;
-    const url = `http://localhost:8000/api/v1/tts?text=${encodeURIComponent(text)}`;
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+    const url = `${apiBase}/tts?text=${encodeURIComponent(text)}`;
     const audio = new Audio(url);
     
     audio.play().catch((e) => {

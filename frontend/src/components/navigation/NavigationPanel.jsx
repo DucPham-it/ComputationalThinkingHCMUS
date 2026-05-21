@@ -11,9 +11,13 @@ const NavigationPanel = ({
   remainingDistance = "0 km",
   remainingTime = "0 phút",
   onEnd = () => { },
+  isVoiceOn: propIsVoiceOn,
+  onToggleVoice: propOnToggleVoice,
+  voiceControlled = false,
   className = ""
 }) => {
-  const [isVoiceOn, setIsVoiceOn] = useState(true);
+  const [localIsVoiceOn, setLocalIsVoiceOn] = useState(true);
+  const isVoiceOn = propIsVoiceOn !== undefined ? propIsVoiceOn : localIsVoiceOn;
   const [showOverview, setShowOverview] = useState(false);
 
   const currentStep = steps[currentStepIndex] || {
@@ -50,20 +54,25 @@ const NavigationPanel = ({
   const lastSpokenIndex = useRef(-1);
 
   useEffect(() => {
+    if (voiceControlled) return;
     if (isVoiceOn && currentStep && currentStep.instruction !== 'Đang tải...') {
       if (lastSpokenIndex.current !== currentStepIndex) {
         lastSpokenIndex.current = currentStepIndex;
         playTTS(currentStep.instruction);
       }
     }
-  }, [currentStepIndex, currentStep, isVoiceOn]);
+  }, [currentStepIndex, currentStep, isVoiceOn, voiceControlled]);
 
   const toggleVoice = () => {
     const newState = !isVoiceOn;
-    setIsVoiceOn(newState);
+    if (propOnToggleVoice) {
+      propOnToggleVoice(newState);
+    } else {
+      setLocalIsVoiceOn(newState);
+    }
     
     // Khi người dùng tự tay bấm bật tiếng (có tương tác click chuột), trình duyệt sẽ chắc chắn cho phép phát âm thanh
-    if (newState && currentStep && currentStep.instruction !== 'Đang tải...') {
+    if (newState && currentStep && currentStep.instruction !== 'Đang tải...' && !voiceControlled) {
       lastSpokenIndex.current = currentStepIndex;
       playTTS(currentStep.instruction);
     }

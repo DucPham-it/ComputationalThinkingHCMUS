@@ -225,6 +225,9 @@ export default function useNavigationController(config = {}) {
       remainingDistance,
       remainingTime,
       onEnd: stopNavigation,
+      isVoiceOn: isVoiceEnabled,
+      onToggleVoice: () => setIsVoiceEnabled(!isVoiceEnabled),
+      voiceControlled: true,
     };
   }, [route, engine.totalDistanceRemaining, engine.currentStepIndex, stopNavigation]);
 

@@ -6,6 +6,9 @@ import MapContainer from "../components/map/MapContainer";
 import MarkerList from "../components/map/MarkerList";
 import RouteMap from "../components/map/RouteMap";
 import Section from "../components/common/Section";
+import UserPositionMarker from "../components/map/UserPositionMarker";
+import NavigationPanel from "../components/navigation/NavigationPanel";
+import useNavigationController from "../hooks/useNavigationController";
 import { useAuth } from "../hooks/useAuth";
 import { useApp } from "../hooks/useApp";
 import {
@@ -92,6 +95,47 @@ function sanitizePickedPlace(place) {
   return cleanPlace;
 }
 
+/**
+ * Chuyển đổi định dạng các bước chỉ đường từ API backend sang cấu trúc chuẩn của frontend.
+ *
+ * Owner: Người 7 (TV7)
+ * Input: steps (Mảng các bước từ API)
+ * Output: Mảng các bước được chuẩn hóa tọa độ và thuộc tính hiển thị
+ */
+function mapRouteSteps(steps = []) {
+  return steps.map((step) => {
+    const geometryPoints = Array.isArray(step.geometry)
+      ? step.geometry.map((point) => {
+          if (Array.isArray(point) && point.length >= 2) {
+            return { lat: point[1], lng: point[0] };
+          }
+          return point;
+        })
+      : [];
+
+    let maneuverLocation = null;
+    if (Array.isArray(step.maneuver_location) && step.maneuver_location.length >= 2) {
+      maneuverLocation = {
+        lat: step.maneuver_location[1],
+        lng: step.maneuver_location[0],
+      };
+    }
+
+    return {
+      instruction: step.instruction,
+      instructions: step.instruction, // backward compatibility
+      distance: step.distance_text,
+      duration: step.duration_text,
+      geometry: geometryPoints,
+      maneuver_type: step.maneuver_type,
+      maneuver_modifier: step.maneuver_modifier,
+      maneuver_location: maneuverLocation,
+      distance_meters: step.distance_meters,
+      duration_seconds: step.duration_seconds,
+    };
+  });
+}
+
 export default function RouteView() {
   const navigate = useNavigate();
   const { isAuthenticated, hasCompletedProfile } = useAuth();
@@ -117,6 +161,79 @@ export default function RouteView() {
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [locationNotice, setLocationNotice] = useState("");
   const [selectedPopupPlaceId, setSelectedPopupPlaceId] = useState(null);
+
+  const [inNavigationMode, setInNavigationMode] = useState(false);
+
+  /**
+   * Tính toán lại tuyến đường đi tự động khi GPS chệch hướng quá giới hạn.
+   *
+   * Owner: Người 7 (TV7)
+   * Input: gpsLocation (Tọa độ hiện tại của thiết bị)
+   * Output: Gọi API lấy route mới, cập nhật routeInfo để hiển thị và dẫn đường
+   */
+  const handleReroute = async (gpsLocation) => {
+    if (!destinationPoint && !destinationInput) return;
+    const originStr = `${gpsLocation.latitude},${gpsLocation.longitude}`;
+    const destStr = destinationPoint
+      ? `${destinationPoint.latitude},${destinationPoint.longitude}`
+      : destinationInput;
+
+    console.log("Rerouting from GPS coordinate:", originStr);
+    try {
+      const data = await getRoute({
+        origin: originStr,
+        destination: destStr,
+        travel_mode: travelMode.toLowerCase(),
+      });
+
+      const updatedRoute = {
+        origin: data.origin,
+        destination: data.destination,
+        distance: data.distance_text,
+        duration: data.duration_text,
+        distanceKm: data.distance_km,
+        durationSeconds: data.duration_seconds,
+        path: data.path || [],
+        steps: mapRouteSteps(data.steps),
+      };
+
+      setRouteInfo(updatedRoute);
+      setLocationNotice("Tuyến đường đã được cập nhật lại theo vị trí mới.");
+    } catch (err) {
+      console.error("Failed to auto-reroute:", err);
+      setLocationNotice("Tính toán lại tuyến đường thất bại.");
+    }
+  };
+
+  /**
+   * Xử lý hành vi khi người dùng đi đến đích thành công.
+   *
+   * Owner: Người 7 (TV7)
+   * Input: Không có
+   * Output: Hiển thị thông báo chúc mừng
+   */
+  const handleArrival = () => {
+    alert("Chúc mừng! Bạn đã đến đích an toàn.");
+  };
+
+  /**
+   * Xử lý kết thúc hành trình dẫn đường.
+   *
+   * Owner: Người 7 (TV7)
+   * Input: Không có
+   * Output: Tắt chế độ dẫn đường, cập nhật thông báo
+   */
+  const handleEndNavigation = () => {
+    setInNavigationMode(false);
+    setLocationNotice("Đã dừng chế độ dẫn đường.");
+  };
+
+  const navController = useNavigationController({
+    route: routeInfo,
+    onReroute: handleReroute,
+    onArrival: handleArrival,
+    onEnd: handleEndNavigation,
+  });
 
   useEffect(() => {
     if (selectedPlace?.address) {
@@ -415,11 +532,7 @@ export default function RouteView() {
         distanceKm: data.distance_km,
         durationSeconds: data.duration_seconds,
         path: data.path || [],
-        steps: (data.steps || []).map((step) => ({
-          instructions: step.instruction,
-          distance: step.distance_text,
-          duration: step.duration_text,
-        })),
+        steps: mapRouteSteps(data.steps),
       });
     } catch (error) {
       setRouteInfo(null);
@@ -451,6 +564,42 @@ export default function RouteView() {
   const gpsMarkerIcon = buildPointMarker("#2563eb");
   const originMarkerIcon = buildPointMarker("#16a34a");
   const destinationMarkerIcon = buildPointMarker("#7c3aed");
+
+  if (inNavigationMode) {
+    return (
+      <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
+        <MapContainer
+          navigationMode={true}
+          followPosition={navController.gpsPosition}
+          center={navController.gpsPosition || mapCenter}
+          zoom={17}
+        >
+          {routeInfo?.steps?.length ? (
+            <RouteMap
+              navigationMode={true}
+              steps={routeInfo.steps}
+              currentStepIndex={navController.currentStepIndex}
+              path={routeInfo.path}
+            />
+          ) : null}
+
+          {navController.gpsPosition && (
+            <UserPositionMarker
+              position={navController.gpsPosition}
+              heading={navController.gpsHeading}
+              accuracy={navController.gpsAccuracy}
+            />
+          )}
+        </MapContainer>
+
+        {navController.navigationProps && (
+          <NavigationPanel
+            {...navController.navigationProps}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "grid", gap: "24px" }}>
@@ -729,6 +878,26 @@ export default function RouteView() {
                   <div style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>Duration</div>
                   <strong style={{ color: "var(--color-text)" }}>{routeInfo.duration}</strong>
                 </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{
+                    padding: "12px 20px",
+                    borderRadius: "14px",
+                    fontWeight: 700,
+                    backgroundColor: "#16a34a",
+                    borderColor: "#16a34a"
+                  }}
+                  onClick={() => {
+                    setInNavigationMode(true);
+                    navController.actions.start();
+                  }}
+                >
+                  Bắt đầu dẫn đường (Turn-by-Turn)
+                </button>
               </div>
 
               {routeInfo.steps?.length ? (

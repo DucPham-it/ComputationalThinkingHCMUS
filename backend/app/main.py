@@ -27,8 +27,14 @@ from app.api.routes import (
 from app.core.config import settings
 from app.db.connection import check_database_connection
 from app.db.session import engine
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title=settings.app_name)
+
+# Mount local storage folder to serve uploaded files locally
+storage_dir = BACKEND_DIR / "storage"
+storage_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/storage", StaticFiles(directory=str(storage_dir)), name="storage")
 
 app.add_middleware(
     CORSMiddleware,

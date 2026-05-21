@@ -14,6 +14,7 @@ import {
 import { addFavorite } from "../services/favoriteService";
 import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/mapPickService";
 import { getRoute } from "../services/routeService";
+import { buildRouteDestinationFromMapPick } from "./MapView";
 
 const TRAVEL_MODES = [
   { value: "DRIVING", label: "Driving" },
@@ -212,8 +213,8 @@ export default function RouteView() {
     originMode === "gps" && currentLocation
       ? coordinatePointToRequest(currentLocation)
       : originPoint
-      ? coordinatePointToRequest(originPoint)
-      : originInput.trim();
+        ? coordinatePointToRequest(originPoint)
+        : originInput.trim();
 
   const destinationForRequest = destinationPoint
     ? coordinatePointToRequest(destinationPoint)
@@ -223,23 +224,25 @@ export default function RouteView() {
     originMode === "gps" && currentLocation
       ? formatCoordinatePoint(currentLocation)
       : originPoint
-      ? formatCoordinatePoint(originPoint)
-      : originInput || "Pick a point on the map or type it manually";
+        ? formatCoordinatePoint(originPoint)
+        : originInput || "Pick a point on the map or type it manually";
 
   const destinationSummary = destinationPoint
     ? formatCoordinatePoint(destinationPoint)
     : destinationInput || selectedPlace?.name || "Pick a place or click a destination on the map";
 
-  const routeFitBoundsPoints = useMemo(
-    () =>
-      [
-        ...(recommendationPlaces || []),
-        originMode === "gps" ? currentLocation : originPoint,
-        destinationPoint,
-        ...(routeInfo?.path || []),
-      ].filter(Boolean),
-    [currentLocation, destinationPoint, originMode, originPoint, recommendationPlaces, routeInfo]
-  );
+  const routeFitBoundsPoints = useMemo(() => {
+    // If a route is successfully calculated, fit the map to the entire route path
+    if (routeInfo?.path?.length) {
+      return routeInfo.path;
+    }
+
+    // Otherwise, only fit bounds to the static recommendation places.
+    // We explicitly exclude originPoint, destinationPoint, and currentLocation here
+    // to prevent the map from annoyingly zooming out (fitBounds) when the user
+    // manually picks or confirms a point on the map.
+    return (recommendationPlaces || []).filter((p) => !p._isTemporaryMapSelection);
+  }, [recommendationPlaces, routeInfo]);
 
   if (!canUseRoute) {
     return (
@@ -265,40 +268,40 @@ export default function RouteView() {
 
   async function applyMapPoint(point, target) {
     setRouteError("");
+
+    // Optimistic UI update
+    const fallbackPlace = buildTemporaryMapPlace(point);
+    setRecommendationPlaces((previousPlaces) => [
+      fallbackPlace,
+      ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
+    ]);
+    setSelectedPopupPlaceId(fallbackPlace.id);
+    setLocationNotice(
+      target === "origin"
+        ? "Map point previewed. Use Pick on map to confirm it as the start point."
+        : "Map point previewed. Use Pick on map to confirm it as the destination."
+    );
+
     try {
       const resolvedPlace = await resolvePlaceFromCoordinates({
         latitude: point.latitude,
         longitude: point.longitude,
       });
+      // recommendationPlaces might be stale in closure, rely on functional updates
       const alreadyListed = recommendationPlaces.some((place) => place.id === resolvedPlace.id);
       const previewPlace = {
         ...resolvedPlace,
         _isTemporaryMapSelection: !alreadyListed,
       };
-      const mergedPlaces = [
-        previewPlace,
-        ...recommendationPlaces.filter((place) => place.id !== resolvedPlace.id),
-      ];
-      setRecommendationPlaces(mergedPlaces);
-      setSelectedPopupPlaceId(previewPlace.id);
-      setLocationNotice(
-        target === "origin"
-          ? "Map point previewed. Use Pick on map to confirm it as the start point."
-          : "Map point previewed. Use Pick on map to confirm it as the destination."
-      );
-      return;
-    } catch (error) {
-      const fallbackPlace = buildTemporaryMapPlace(point);
+
       setRecommendationPlaces((previousPlaces) => [
-        fallbackPlace,
-        ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
+        previewPlace,
+        ...previousPlaces.filter((place) => place.id !== resolvedPlace.id && place.id !== fallbackPlace.id),
       ]);
-      setSelectedPopupPlaceId(fallbackPlace.id);
-      setLocationNotice(
-        target === "origin"
-          ? "Map point previewed manually. Use Pick on map to confirm it as the start point."
-          : "Map point previewed manually. Use Pick on map to confirm it as the destination."
-      );
+      setSelectedPopupPlaceId((prevId) => prevId === fallbackPlace.id ? previewPlace.id : prevId);
+    } catch (error) {
+      console.error("Failed to resolve clicked point", error);
+      // Fallback is already showing
     }
   }
 
@@ -332,11 +335,15 @@ export default function RouteView() {
       setOriginPoint(resolvedPoint);
       setOriginInput(
         place.address ||
-          place.name ||
-          (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
+        place.name ||
+        (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
       );
-      setLocationNotice("Start point confirmed from the map.");
+      setLocationNotice("Start point confirmed from the map. Now pick the destination.");
       clearPreviewSelection(place);
+
+      // Automatically switch target to destination for better UX
+      setSelectionTarget("destination");
+
       return;
     }
 
@@ -346,12 +353,12 @@ export default function RouteView() {
       });
     }
 
-    setSelectedPlace(place._isLocalOnly ? null : sanitizePickedPlace(place));
+    setSelectedPlace(place._isLocalOnly ? null : destination);
     setDestinationPoint(resolvedPoint);
     setDestinationInput(
       place.address ||
-        place.name ||
-        (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
+      place.name ||
+      (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
     );
     setLocationNotice("Destination confirmed from the map.");
     clearPreviewSelection(place);
@@ -370,9 +377,9 @@ export default function RouteView() {
           previousPlaces.map((item) =>
             item.id === place.id
               ? {
-                  ...item,
-                  _isTemporaryMapSelection: false,
-                }
+                ...item,
+                _isTemporaryMapSelection: false,
+              }
               : item
           )
         );

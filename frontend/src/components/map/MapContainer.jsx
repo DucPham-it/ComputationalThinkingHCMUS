@@ -3,7 +3,7 @@
  * Supports navigation mode with full-screen view and GPS follow.
  */
 
-import { MapContainer as LeafletMapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer as LeafletMapContainer, TileLayer, useMap, useMapEvents, ZoomControl } from "react-leaflet";
 import { useEffect, useMemo, useRef } from "react";
 
 const mapContainerStyle = {
@@ -58,10 +58,10 @@ function MapUpdater({ center, zoom }) {
         resolveCoordinate(center, "latitude", "lat"),
         resolveCoordinate(center, "longitude", "lng"),
       ],
-      zoom,
+      map.getZoom(),
       { animate: true }
     );
-  }, [center, map, zoom]);
+  }, [center, map]);
 
   return null;
 }
@@ -180,14 +180,15 @@ export default function MapContainer({
           resolveCoordinate(resolvedCenter, "longitude", "lng"),
         ]}
         zoom={effectiveZoom}
+        zoomControl={false}
         scrollWheelZoom
         style={effectiveStyle}
-        zoomControl={!navigationMode}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        {!navigationMode && <ZoomControl position="bottomright" />}
         {!navigationMode && <MapUpdater center={resolvedCenter} zoom={effectiveZoom} />}
         {!navigationMode && <MapBoundsUpdater points={fitBoundsPoints} />}
         <MapClickHandler onMapClick={onMapClick} />

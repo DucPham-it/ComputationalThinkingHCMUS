@@ -567,17 +567,30 @@ def parse_recommendation_language_contract(query: str) -> dict:
 
     if match_km:
         value = int(match_km.group(1))
+        before_match = text[:match_km.start()].strip()
+        words_before = before_match.split()
+        
+        last_phrase_2 = " ".join(words_before[-2:]) if len(words_before) >= 2 else ""
+        last_phrase_1 = words_before[-1] if len(words_before) >= 1 else ""
 
-        if contains_phrase(text, ("tren", "hon")):
+        def check_modifier(modifiers: tuple[str, ...]) -> bool:
+            return any(
+                last_phrase_1 == m or 
+                last_phrase_2 == m or 
+                last_phrase_2.endswith(" " + m) 
+                for m in modifiers
+            )
+
+        if check_modifier(("tren", "hon")):
             distance_hint_km = value + 1
 
-        elif contains_phrase(text, ("duoi", "nho hon")):
+        elif check_modifier(("duoi", "nho hon")):
             distance_hint_km = max(0, value - 1)
 
-        elif contains_phrase(text, ("khong qua",)):
+        elif check_modifier(("khong qua",)):
             distance_hint_km = value
 
-        elif contains_phrase(text, ("khoang", "tam")):
+        elif check_modifier(("khoang", "tam", "trong", "vong", "trong vong")):
             distance_hint_km = value
 
         else:

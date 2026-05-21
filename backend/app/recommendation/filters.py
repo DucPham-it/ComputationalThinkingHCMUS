@@ -188,11 +188,14 @@ def apply_filters(
     effective_ent_type = plan.get("entertainment_type")
 
     # Define fallback relaxation stages
-    fallback_stages = [
-        [],  # Round 1: Strict - apply all
-        ["preferred_types", "time_slot"],  # Round 2: Relax types and time slot
-        ["preferred_types", "time_slot", "budget_level", "companion_type", "min_rating"]  # Round 3: Only hard filters
-    ]
+    if len(places) < 10:
+        fallback_stages = [[]]
+    else:
+        fallback_stages = [
+            [],  # Round 1: Strict - apply all
+            ["preferred_types", "time_slot"],  # Round 2: Relax types and time slot
+            ["preferred_types", "time_slot", "budget_level", "companion_type", "min_rating"]  # Round 3: Only hard filters
+        ]
 
     final_results = []
 
@@ -528,4 +531,4 @@ def apply_preferred_types_filter(places: list[dict[str, Any]], *, preferred_type
             place["filter_reasons"].append(f"Thỏa mãn sở thích cá nhân của bạn ({matched_str})")
             filtered.append(place)
 
-    
+    return filtered

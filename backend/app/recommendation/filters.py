@@ -90,7 +90,7 @@ def build_filter_plan(nlp_fields: dict[str, Any] | None, ui_filters: dict[str, A
     Output:
     - dict accepted by apply_filters:
       max_distance_km, allowed_types, require_open_now, min_rating,
-      budget_level, companion_type, time_slot, source_map.
+      budget_level, companion_type, time_slot, entertainment_type, source_map.
 
     Rule:
     - explicit UI filters override NLP-derived filters.
@@ -106,6 +106,7 @@ def build_filter_plan(nlp_fields: dict[str, Any] | None, ui_filters: dict[str, A
         "time_slot": ("time_slot", "start_time"),
         "require_open_now": ("require_open_now",),
         "min_rating": ("min_rating",),
+        "entertainment_type": ("entertainment_type",),
     }
     plan: dict[str, Any] = {"source_map": {}}
 
@@ -165,15 +166,8 @@ def apply_filters(
 ) -> list[dict[str, Any]]:
     """Filter candidate places using stable, backward-compatible arguments.
 
-    Input:
-    - places: candidate place dicts.
-    - max_distance_km/allowed_types/require_open_now/min_rating/budget_level:
-      current recommender.py call contract.
-    - nlp_fields/ui_filters/user_location: optional TV4 filter-plan contract.
-    - companion_type/time_slot/preferred_types: optional soft filter fields.
-
-    Output:
-    - filtered list. Missing optional metadata does not crash the pipeline.
+    Combines Vietnamese filter reasons, synonym mapping, and a looping
+    fallback filter relaxation mechanism to guarantee at least 10 candidates.
     """
     plan = build_filter_plan(nlp_fields, ui_filters) if nlp_fields or ui_filters else {}
 
@@ -191,48 +185,64 @@ def apply_filters(
     effective_budget = normalize_budget_level(budget_level) or plan.get("budget_level")
     effective_companion = companion_type or plan.get("companion_type")
     effective_time_slot = time_slot or plan.get("time_slot")
+    effective_ent_type = plan.get("entertainment_type")
 
-    filtered = list(places)
+    # Define fallback relaxation stages
+    fallback_stages = [
+        [],  # Round 1: Strict - apply all
+        ["preferred_types", "time_slot"],  # Round 2: Relax types and time slot
+        ["preferred_types", "time_slot", "budget_level", "companion_type", "min_rating"]  # Round 3: Only hard filters
+    ]
 
-    if effective_distance is not None:
-        filtered = apply_distance_filter(
-            filtered,
-            max_distance_km=effective_distance,
-            user_location=user_location,
-        )
+    final_results = []
 
-    if effective_types:
-        filtered = apply_preferred_types_filter(filtered, preferred_types=effective_types)
+    for drop_keys in fallback_stages:
+        current_candidates = [dict(place) for place in places]
+        for p in current_candidates:
+            p["filter_reasons"] = []
 
-    if effective_open_now:
-        filtered = apply_open_now_filter(filtered, require_open_now=True)
+        # Flexible filters
+        if effective_budget and "budget_level" not in drop_keys:
+            current_candidates = apply_budget_filter(current_candidates, budget_level=effective_budget)
 
-    if effective_min_rating is not None:
-        filtered = apply_rating_filter(filtered, min_rating=effective_min_rating)
+        if effective_companion and "companion_type" not in drop_keys:
+            current_candidates = apply_companion_filter(current_candidates, companion_type=effective_companion)
 
-    if effective_budget:
-        filtered = apply_budget_filter(filtered, budget_level=effective_budget)
+        if effective_min_rating is not None and "min_rating" not in drop_keys:
+            current_candidates = apply_rating_filter(current_candidates, min_rating=effective_min_rating)
 
-    if effective_companion:
-        filtered = apply_companion_filter(filtered, companion_type=effective_companion)
+        if effective_time_slot and "time_slot" not in drop_keys:
+            current_candidates = apply_time_slot_filter(current_candidates, time_slot=effective_time_slot)
 
-    if effective_time_slot:
-        filtered = apply_time_slot_filter(filtered, time_slot=effective_time_slot)
+        if effective_types and "preferred_types" not in drop_keys:
+            current_candidates = apply_preferred_types_filter(current_candidates, preferred_types=effective_types)
 
-    return filtered
+        # Hard filters
+        if effective_ent_type:
+            current_candidates = apply_type_filter(current_candidates, expected_type=effective_ent_type)
+
+        if effective_distance is not None:
+            current_candidates = apply_distance_filter(
+                current_candidates,
+                max_distance_km=effective_distance,
+                user_location=user_location,
+            )
+
+        if effective_open_now:
+            current_candidates = apply_open_now_filter(current_candidates, require_open_now=True)
+
+        if len(current_candidates) >= 10:
+            final_results = current_candidates
+            break
+
+        if len(current_candidates) > len(final_results):
+            final_results = current_candidates
+
+    return final_results
 
 
 def apply_budget_filter(places: list[dict[str, Any]], *, budget_level: str) -> list[dict[str, Any]]:
-    """Filter by normalized budget level.
-
-    Input:
-    - places: candidate place dicts containing price_level and/or price_range.
-    - budget_level: low, medium, high, or aliases normalized by this function.
-
-    Output:
-    - places matching the requested budget.
-    - places without price metadata are kept.
-    """
+    """Filter by normalized budget level, appending reasons."""
     normalized_budget = normalize_budget_level(budget_level)
     if normalized_budget is None:
         return places
@@ -242,9 +252,10 @@ def apply_budget_filter(places: list[dict[str, Any]], *, budget_level: str) -> l
         "medium": range(0, 3),
         "high": range(2, 5),
     }
+    
     price_text_aliases = {
-        "low": {"low", "cheap", "budget", "rẻ", "re", "bình dân", "binh dan"},
-        "medium": {"medium", "moderate", "average", "tầm trung", "tam trung"},
+        "low": {"low", "cheap", "budget", "rẻ", "re"},
+        "medium": {"low", "cheap", "budget", "rẻ", "re", "medium", "moderate", "average", "tầm trung", "tam trung", "bình dân", "binh dan"},
         "high": {"high", "premium", "expensive", "luxury", "cao cấp", "cao cap"},
     }
 
@@ -258,50 +269,126 @@ def apply_budget_filter(places: list[dict[str, Any]], *, budget_level: str) -> l
             filtered.append(place)
             continue
 
-        matches_numeric = price_level is not None and int(price_level) in price_level_ranges[normalized_budget]
-        matches_text = raw_price_range in price_text_aliases[normalized_budget]
+        matches_numeric = False
+        is_cheaper = False
+        
+        if price_level is not None:
+            val = int(price_level)
+            if val in price_level_ranges[normalized_budget]:
+                matches_numeric = True
+                if normalized_budget == "medium" and val in price_level_ranges["low"]:
+                    is_cheaper = True
+                elif normalized_budget == "high" and val in price_level_ranges["medium"] and val not in price_level_ranges["high"]:
+                    is_cheaper = True
 
-        if matches_numeric or matches_text:
+        matches_text = False
+        if raw_price_range:
+            cleaned_range = raw_price_range.lower()
+            if cleaned_range in price_text_aliases[normalized_budget]:
+                matches_text = True
+                if normalized_budget == "medium" and cleaned_range in price_text_aliases["low"]:
+                    is_cheaper = True
+                elif normalized_budget == "high" and (cleaned_range in price_text_aliases["low"] or cleaned_range in price_text_aliases["medium"]):
+                    is_cheaper = True
+
+        matches_str_level = False
+        if isinstance(raw_price_level, str) and not raw_price_level.replace('.', '', 1).isdigit():
+            cleaned_level = raw_price_level.strip().lower()
+            if cleaned_level in price_text_aliases[normalized_budget]:
+                matches_str_level = True
+                if normalized_budget == "medium" and cleaned_level in price_text_aliases["low"]:
+                    is_cheaper = True
+                elif normalized_budget == "high" and (cleaned_level in price_text_aliases["low"] or cleaned_level in price_text_aliases["medium"]):
+                    is_cheaper = True
+
+        if matches_numeric or matches_text or matches_str_level:
+            if "filter_reasons" not in place:
+                place["filter_reasons"] = []
+            
+            if is_cheaper:
+                reason = "Lựa chọn tiết kiệm hơn so với ngân sách dự kiến"
+            else:
+                reason = f"Phù hợp với tiêu chí giá {budget_level}"
+            place["filter_reasons"].append(reason)
             filtered.append(place)
 
     return filtered
 
 
 def apply_companion_filter(places: list[dict[str, Any]], *, companion_type: str) -> list[dict[str, Any]]:
-    """Filter or keep places based on companion metadata when available."""
+    """Filter by companion type, utilizing Vietnamese/English synonyms and appending reasons."""
     if not companion_type:
         return places
 
     target = str(companion_type).lower()
-    aliases = {
+    
+    synonym_mapping = {
+        "người yêu": {"couple", "romantic", "dating"},
+        "bạn gái": {"couple", "romantic", "dating"},
+        "bạn trai": {"couple", "romantic", "dating"},
+        "cặp đôi": {"couple", "romantic", "dating"},
+        "trẻ em": {"family", "kids", "children"},
+        "trẻ nhỏ": {"family", "kids", "children"},
+        "con nít": {"family", "kids", "children"},
+        "gia đình": {"family", "kids", "children"},
+        "nhóm bạn": {"friends", "group", "party", "team"},
+        "bạn bè": {"friends", "group", "party", "team"},
+        "một mình": {"solo", "quiet", "alone", "workspace"},
         "solo": {"solo", "quiet", "alone", "workspace"},
         "couple": {"couple", "romantic", "dating"},
         "family": {"family", "kids", "children"},
         "friends": {"friends", "group", "party", "team"},
         "kids": {"family", "kids", "children"},
-    }.get(target, {target})
+    }
+    
+    aliases = synonym_mapping.get(target, {target})
 
     filtered: list[dict[str, Any]] = []
     for place in places:
         place_tags = _as_list(place.get("types")) + _as_list(place.get("tags")) + _as_list(place.get("companion_types"))
+        
         if not place_tags:
             filtered.append(place)
             continue
 
         normalized_tags = {tag.lower() for tag in place_tags}
         if normalized_tags.intersection(aliases):
+            if "filter_reasons" not in place:
+                place["filter_reasons"] = []
+            place["filter_reasons"].append(f"Không gian tuyệt vời để đi cùng {companion_type}")
             filtered.append(place)
 
     return filtered
 
 
-def apply_rating_filter(places: list[dict[str, Any]], *, min_rating: float) -> list[dict[str, Any]]:
-    """Keep places with rating >= min_rating, preserving unknown ratings."""
+def apply_rating_filter(places: list[dict[str, Any]], *, min_rating: float, min_reviews: int = 5) -> list[dict[str, Any]]:
+    """Keep places with rating >= min_rating, checking review_count when available."""
+    if min_rating is None:
+        return places
+        
     filtered: list[dict[str, Any]] = []
     for place in places:
         rating = _as_float(place.get("rating"))
-        if rating is None or rating >= min_rating:
+        review_count = place.get("review_count")
+        
+        if rating is None:
             filtered.append(place)
+            continue
+            
+        try:
+            is_rating_passed = float(rating) >= float(min_rating)
+            is_trustworthy = True
+            if review_count is not None:
+                is_trustworthy = int(review_count) >= min_reviews
+                
+            if is_rating_passed and is_trustworthy:
+                if "filter_reasons" not in place:
+                    place["filter_reasons"] = []
+                place["filter_reasons"].append(f"Chất lượng được cộng đồng bảo chứng ({rating} sao)")
+                filtered.append(place)
+        except (ValueError, TypeError):
+            filtered.append(place)
+            
     return filtered
 
 
@@ -309,11 +396,114 @@ def apply_open_now_filter(places: list[dict[str, Any]], *, require_open_now: boo
     """Keep currently-open places when requested."""
     if not require_open_now:
         return places
-    return [place for place in places if place.get("open_now") is True]
+        
+    filtered: list[dict[str, Any]] = []
+    for place in places:
+        is_open = place.get("open_now")
+        if is_open is None or is_open is True:
+            if is_open is True:
+                if "filter_reasons" not in place:
+                    place["filter_reasons"] = []
+                place["filter_reasons"].append("Địa điểm đang mở cửa phục vụ")
+            filtered.append(place)
+            
+    return filtered
+
+
+def apply_type_filter(places: list[dict[str, Any]], *, expected_type: str) -> list[dict[str, Any]]:
+    """Filter by primary/category/types, utilizing synonyms for common Vietnamese type descriptions."""
+    if not expected_type:
+        return places
+        
+    synonym_mapping = {
+        "quán nước": ["cafe", "tea", "boba", "coffee"],
+        "trà sữa": ["boba", "cafe", "tea"],
+        "chỗ nhậu": ["bar", "pub", "beer", "nightclub"],
+        "quán ăn": ["restaurant", "food", "eatery", "diner"],
+        "sống ảo": ["cafe", "studio", "gallery", "park"]
+    }
+    
+    desired_type = expected_type.lower()
+    target_types = synonym_mapping.get(desired_type, [desired_type])
+        
+    filtered_places = []
+    for place in places:
+        primary = place.get("primary_type", "")
+        place_types = place.get("types", [])
+        category = place.get("category", "")
+        
+        if not primary and not place_types and not category:
+            filtered_places.append(place)
+            continue
+            
+        all_types = []
+        if primary:
+            all_types.append(primary.lower())
+        if category:
+            all_types.extend([c.lower() for c in _as_list(category)])
+        all_types.extend([t.lower() for t in place_types])
+        
+        if any(t in all_types for t in target_types):
+            if "filter_reasons" not in place:
+                place["filter_reasons"] = []
+            place["filter_reasons"].append(f"Đúng loại hình '{expected_type}' bạn mong muốn")
+            filtered_places.append(place)
+            
+    return filtered_places
+
+
+def apply_distance_filter(
+    places: list[dict[str, Any]],
+    *,
+    max_distance_km: float,
+    user_location: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Filter by distance_km or compute distance from user_location when available, appending reasons."""
+    if not max_distance_km:
+        return places
+
+    filtered: list[dict[str, Any]] = []
+    for place in places:
+        distance = _as_float(place.get("distance_km"))
+        if distance is None and user_location:
+            distance = get_distance_between_points(user_location, place)
+
+        if distance is None:
+            filtered.append(place)
+            continue
+
+        try:
+            if float(distance) <= float(max_distance_km):
+                if "filter_reasons" not in place:
+                    place["filter_reasons"] = []
+                place["filter_reasons"].append(f"Khoảng cách thuận lợi (cách {round(float(distance), 1)} km)")
+                filtered.append(place)
+        except (ValueError, TypeError):
+            filtered.append(place)
+
+    return filtered
+
+
+def apply_time_slot_filter(places: list[dict[str, Any]], *, time_slot: str) -> list[dict[str, Any]]:
+    """Filter by suitable_time_slots when that metadata exists, appending reasons."""
+    if not time_slot:
+        return places
+
+    target = str(time_slot).lower()
+    filtered: list[dict[str, Any]] = []
+    for place in places:
+        slots = {slot.lower() for slot in _as_list(place.get("suitable_time_slots"))}
+        if not slots or target in slots:
+            if "filter_reasons" not in place:
+                place["filter_reasons"] = []
+            place["filter_reasons"].append(f"Không gian và dịch vụ lý tưởng cho buổi {time_slot}")
+            filtered.append(place)
+
+    return filtered
 
 
 def apply_preferred_types_filter(places: list[dict[str, Any]], *, preferred_types: list[str]) -> list[dict[str, Any]]:
-    """Filter by primary/category/types, preserving places with missing type metadata."""
+    """Filter by primary/category/types, preserving places with missing type metadata, and appending reasons."""
     allowed = {item.lower() for item in _as_list(preferred_types)}
     if not allowed:
         return places
@@ -326,41 +516,16 @@ def apply_preferred_types_filter(places: list[dict[str, Any]], *, preferred_type
             *[item.lower() for item in _as_list(place.get("types"))],
         }
 
-        if not place_types or place_types.intersection(allowed):
+        if not place_types:
+            filtered.append(place)
+            continue
+
+        matched_prefs = place_types.intersection(allowed)
+        if matched_prefs:
+            if "filter_reasons" not in place:
+                place["filter_reasons"] = []
+            matched_str = ", ".join(sorted(list(matched_prefs)))
+            place["filter_reasons"].append(f"Thỏa mãn sở thích cá nhân của bạn ({matched_str})")
             filtered.append(place)
 
-    return filtered
-
-
-def apply_distance_filter(
-    places: list[dict[str, Any]],
-    *,
-    max_distance_km: float,
-    user_location: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
-    """Filter by distance_km or compute distance from user_location when available."""
-    filtered: list[dict[str, Any]] = []
-    for place in places:
-        distance = _as_float(place.get("distance_km"))
-        if distance is None and user_location:
-            distance = get_distance_between_points(user_location, place)
-
-        if distance is None or distance <= max_distance_km:
-            filtered.append(place)
-
-    return filtered
-
-
-def apply_time_slot_filter(places: list[dict[str, Any]], *, time_slot: str) -> list[dict[str, Any]]:
-    """Filter by suitable_time_slots when that metadata exists."""
-    if not time_slot:
-        return places
-
-    target = str(time_slot).lower()
-    filtered: list[dict[str, Any]] = []
-    for place in places:
-        slots = {slot.lower() for slot in _as_list(place.get("suitable_time_slots"))}
-        if not slots or target in slots:
-            filtered.append(place)
-
-    return filtered
+    

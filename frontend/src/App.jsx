@@ -10,11 +10,18 @@
  */
 import MainLayout from "./layouts/MainLayout";
 import AppRoutes from "./routes/AppRoutes";
+import NavigationTestPage from './pages/NavigationTestPage';
 
+//Test Navigation
 export default function App() {
   return (
-    <MainLayout>
-      <AppRoutes />
-    </MainLayout>
+    // <MainLayout>
+    //   <AppRoutes />
+    // </MainLayout>
+    <NavigationTestPage />
   );
 }
+
+
+
+

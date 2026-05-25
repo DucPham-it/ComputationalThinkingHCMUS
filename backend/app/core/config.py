@@ -47,7 +47,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     ]
     cors_origin_regex: str | None = Field(
-        default=None,
+        default=r"^https://computational-thinking-hcmus(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?\.vercel\.app$",
         validation_alias=AliasChoices("CORS_ORIGIN_REGEX", "CORS_REGEX"),
     )
 

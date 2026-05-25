@@ -9,6 +9,7 @@ import PlaceDetail from "../pages/PlaceDetail";
 import MapView from "../pages/MapView";
 import RouteView from "../pages/RouteView";
 import Favorites from "../pages/Favorites";
+import SocialFeed from "../pages/SocialFeed";
 import Login from "../pages/Login";
 import Register from "../pages/Register";
 import Profile from "../pages/Profile";
@@ -22,6 +23,7 @@ export default function AppRoutes() {
       <Route path="/map" element={<MapView />} />
       <Route path="/route" element={<RouteView />} />
       <Route path="/favorites" element={<Favorites />} />
+      <Route path="/social" element={<SocialFeed />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/profile" element={<Profile />} />

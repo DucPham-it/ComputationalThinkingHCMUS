@@ -7,6 +7,7 @@ import {
     Navigation, 
     Heart, 
     User, 
+    Users,
     Menu, 
     X, 
     Compass,
@@ -57,6 +58,7 @@ export default function Navbar() {
         { path: "/map", label: "Map", icon: MapPin },
         { path: "/route", label: "Route", icon: Navigation },
         { path: "/favorites", label: "Saved", icon: Heart },
+        { path: "/social", label: "Social", icon: Users },
     ];
     if (isAuthenticated && user?.is_admin) {
         navLinks.push({ path: "/admin", label: "Admin", icon: ShieldCheck });
@@ -72,9 +74,10 @@ export default function Navbar() {
                 zIndex: 1000,
                 transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
                 padding: isScrolled ? "10px 0" : "18px 0",
-                backgroundColor: isScrolled ? "rgba(255, 255, 255, 0.8)" : "transparent",
-                boxShadow: isScrolled ? "0 10px 30px -10px rgba(0, 0, 0, 0.08)" : "none",
-                borderBottom: isScrolled ? "1px solid var(--color-border)" : "1px solid transparent"
+                backgroundColor: isScrolled ? "rgba(255, 255, 255, 0.78)" : "rgba(255, 255, 255, 0.46)",
+                backdropFilter: "blur(22px) saturate(160%)",
+                boxShadow: isScrolled ? "0 18px 42px -18px rgba(15, 23, 42, 0.18)" : "0 1px 0 rgba(255,255,255,0.45)",
+                borderBottom: isScrolled ? "1px solid var(--color-border)" : "1px solid rgba(255,255,255,0.32)"
             }}
         >
             <div className="container navbar-inner" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -106,7 +109,7 @@ export default function Navbar() {
                     <span style={{ 
                         fontSize: "1.25rem", 
                         fontWeight: 800, 
-                        letterSpacing: "-0.04em",
+                        letterSpacing: 0,
                         color: "var(--color-text)" 
                     }}>
                         GoTo<span style={{ color: "var(--color-primary)" }}>Everywhere</span>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CircleMarker, Tooltip } from "react-leaflet";
+import { CheckCircle } from "lucide-react";
 
 import MapContainer from "../components/map/MapContainer";
 import MarkerList from "../components/map/MarkerList";
@@ -14,6 +15,7 @@ import {
 import { addFavorite } from "../services/favoriteService";
 import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/mapPickService";
 import { getRoute } from "../services/routeService";
+import { recordVisitedPlace } from "../services/socialService";
 
 const TRAVEL_MODES = [
   { value: "DRIVING", label: "Driving" },
@@ -114,6 +116,9 @@ export default function RouteView() {
   const [routeInfo, setRouteInfo] = useState(null);
   const [routeError, setRouteError] = useState("");
   const [loadingRoute, setLoadingRoute] = useState(false);
+  const [savingVisitedPlace, setSavingVisitedPlace] = useState(false);
+  const [routeCompletionMessage, setRouteCompletionMessage] = useState("");
+  const [routeCompletionError, setRouteCompletionError] = useState("");
   const [locationNotice, setLocationNotice] = useState("");
   const [selectedPopupPlaceId, setSelectedPopupPlaceId] = useState(null);
 
@@ -137,6 +142,8 @@ export default function RouteView() {
   useEffect(() => {
     setRouteInfo(null);
     setRouteError("");
+    setRouteCompletionMessage("");
+    setRouteCompletionError("");
   }, [
     currentLocation,
     destinationInput,
@@ -424,6 +431,38 @@ export default function RouteView() {
     }
   }
 
+  async function handleCompleteRoute() {
+    if (!routeInfo || typeof selectedPlace?.id !== "number") {
+      setRouteCompletionError("Choose a catalog place as destination before marking this route complete.");
+      return;
+    }
+
+    try {
+      setSavingVisitedPlace(true);
+      setRouteCompletionError("");
+      const visitedPlace = await recordVisitedPlace({
+        place_id: selectedPlace.id,
+        route_origin: routeInfo.origin,
+        route_destination: routeInfo.destination,
+        distance_text: routeInfo.distance,
+        duration_text: routeInfo.duration,
+        distance_km: routeInfo.distanceKm,
+        duration_seconds: routeInfo.durationSeconds,
+        travel_mode: travelMode.toLowerCase(),
+      });
+      setRouteCompletionMessage(
+        `${visitedPlace.place_name} has been added to your visited places.`
+      );
+    } catch (error) {
+      setRouteCompletionError(
+        error?.response?.data?.detail ||
+          "We couldn't mark this route as completed right now."
+      );
+    } finally {
+      setSavingVisitedPlace(false);
+    }
+  }
+
   async function handleUseGps() {
     try {
       const browserLocation = await getCurrentBrowserLocation();
@@ -444,12 +483,12 @@ export default function RouteView() {
   const gpsMarkerIcon = buildPointMarker("#2563eb");
   const originMarkerIcon = buildPointMarker("#16a34a");
   const destinationMarkerIcon = buildPointMarker("#7c3aed");
+  const canCompleteRoute = routeInfo && typeof selectedPlace?.id === "number";
 
   return (
     <div style={{ display: "grid", gap: "24px" }}>
       <Section
         title="Route Planner"
-        subtitle="Pan and zoom freely, preview any place on the map, then confirm it with Pick on map. Suggestion picks still become your destination by default."
       >
         <form className="card" onSubmit={handleRouteSubmit} style={{ display: "grid", gap: "18px" }}>
           <div style={{ display: "grid", gap: "12px" }}>
@@ -722,6 +761,78 @@ export default function RouteView() {
                   <div style={{ color: "var(--color-text-soft)", fontSize: "0.9rem" }}>Duration</div>
                   <strong style={{ color: "var(--color-text)" }}>{routeInfo.duration}</strong>
                 </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "10px" }}>
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "12px 16px",
+                      borderRadius: "14px",
+                      fontWeight: 800,
+                    }}
+                    onClick={handleCompleteRoute}
+                    disabled={!canCompleteRoute || savingVisitedPlace}
+                    title={
+                      canCompleteRoute
+                        ? "Mark this route as completed"
+                        : "Pick a catalog place as destination first"
+                    }
+                  >
+                    <CheckCircle size={18} />
+                    {savingVisitedPlace ? "Saving..." : "Mark as Visited"}
+                  </button>
+                  <Link
+                    to="/social"
+                    className="btn-outline"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "12px 16px",
+                      borderRadius: "14px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    Write Post
+                  </Link>
+                </div>
+
+                {routeCompletionMessage ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      padding: "12px 14px",
+                      borderRadius: "14px",
+                      background: "#ecfdf5",
+                      color: "#047857",
+                      border: "1px solid rgba(16, 185, 129, 0.18)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {routeCompletionMessage}
+                  </p>
+                ) : null}
+
+                {routeCompletionError ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      padding: "12px 14px",
+                      borderRadius: "14px",
+                      background: "#fef2f2",
+                      color: "#b91c1c",
+                      border: "1px solid rgba(220, 38, 38, 0.15)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {routeCompletionError}
+                  </p>
+                ) : null}
               </div>
 
               {routeInfo.steps?.length ? (

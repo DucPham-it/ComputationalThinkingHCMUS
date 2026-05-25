@@ -104,7 +104,7 @@ export default function PlaceCard({ place }) {
 
     return (
         <div
-            className="card fade-in hover-lift"
+            className="card dynamic-card place-card fade-in hover-lift"
             style={{ 
                 cursor: canViewPlace ? "pointer" : "default",
                 padding: 0, // Xóa padding mặc định của thẻ card để banner chạm viền

@@ -95,7 +95,7 @@ export default function Favorites() {
 
   return (
     <div style={{ display: "grid", gap: "18px" }}>
-      <div className="card" style={{ display: "grid", gap: "8px" }}>
+      <div className="card dynamic-card saved-hero-card" style={{ display: "grid", gap: "8px" }}>
         <h1 style={{ marginBottom: 0 }}>Saved</h1>
         <p style={{ marginBottom: 0 }}>
           These are the places you saved for quick access later.
@@ -106,24 +106,42 @@ export default function Favorites() {
         {places.map((place) => (
           <div
             key={place.id}
-            className="card"
-            style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
+            className="card dynamic-card saved-place-card"
+            style={{
+              padding: 0,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              background: "rgba(255, 255, 255, 0.96)",
+            }}
           >
             <div
               style={{
                 height: "140px",
                 background: place.photo_url
-                  ? `linear-gradient(rgba(15, 23, 42, 0.22), rgba(15, 23, 42, 0.22)), url(${place.photo_url}) center/cover`
-                  : "linear-gradient(135deg, #dbeafe 0%, #fef3c7 100%)",
+                  ? `linear-gradient(rgba(15, 23, 42, 0.34), rgba(15, 23, 42, 0.18)), url(${place.photo_url}) center/cover`
+                  : "linear-gradient(135deg, #bfdbfe 0%, #99f6e4 55%, #fde68a 100%)",
               }}
             />
             <div style={{ padding: "18px", display: "grid", gap: "12px", flex: 1 }}>
               <div>
-                <h3 style={{ marginBottom: "8px" }}>{place.name}</h3>
-                <p style={{ marginBottom: 0, color: "var(--color-text-soft)" }}>{place.address}</p>
+                <h3 style={{ marginBottom: "8px", color: "var(--color-text)", fontWeight: 900 }}>
+                  {place.name}
+                </h3>
+                <p style={{ marginBottom: 0, color: "var(--color-text-soft)", fontWeight: 650 }}>
+                  {place.address}
+                </p>
               </div>
 
-              <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", color: "var(--color-text-soft)" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "14px",
+                  flexWrap: "wrap",
+                  color: "var(--color-text-soft)",
+                  fontWeight: 700,
+                }}
+              >
                 <span>Rating: {place.rating ?? "N/A"}</span>
                 <span>Reviews: {place.review_count ?? 0}</span>
                 <span style={{ textTransform: "capitalize" }}>{place.primary_type ?? "place"}</span>
@@ -155,7 +173,15 @@ export default function Favorites() {
                 </button>
               </div>
               {place.latitude != null && place.longitude != null ? (
-                <div style={{ display: "flex", gap: "8px", color: "var(--color-text-soft)", fontSize: "0.9rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    color: "var(--color-text-soft)",
+                    fontSize: "0.9rem",
+                    fontWeight: 700,
+                  }}
+                >
                   <MapPin size={16} />
                   <span>
                     {place.latitude.toFixed(5)}, {place.longitude.toFixed(5)}

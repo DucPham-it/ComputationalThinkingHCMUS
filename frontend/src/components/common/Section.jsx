@@ -19,7 +19,7 @@ export default function Section({
 
     return (
         <section
-            className={`container fade-in ${className}`}
+            className={`section-frame fade-in ${className}`}
             style={{
                 // Sử dụng biến không gian linh hoạt thay vì fix cứng 24px
                 marginBottom: "clamp(32px, 5vw, 64px)", 
@@ -36,7 +36,7 @@ export default function Section({
                         alignItems: "flex-end", // Căn đáy để nút action ngang hàng với baseline của title
                         marginBottom: "24px",
                         paddingBottom: "16px",
-                        borderBottom: "1px solid rgba(0, 0, 0, 0.04)", // Đường viền mờ phân cách tinh tế
+                        borderBottom: "1px solid rgba(148, 163, 184, 0.22)", // Đường viền mờ phân cách tinh tế
                         flexWrap: "wrap",
                         gap: "16px"
                     }}
@@ -50,7 +50,7 @@ export default function Section({
                                     margin: 0,
                                     fontSize: "clamp(1.5rem, 3vw, 1.8rem)", // Font chữ tự động thu nhỏ trên Mobile
                                     fontWeight: 800,
-                                    letterSpacing: "-0.02em",
+                                    letterSpacing: 0,
                                     color: "var(--color-text)"
                                 }}
                             >

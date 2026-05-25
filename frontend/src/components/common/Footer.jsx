@@ -14,7 +14,8 @@ export default function Footer() {
             className="footer fade-in"
             style={{
                 marginTop: "auto", // Luôn nằm dưới cùng của trang
-                backgroundColor: "var(--color-bg)",
+                background: "rgba(255, 255, 255, 0.58)",
+                backdropFilter: "blur(18px)",
                 borderTop: "1px solid var(--color-border)",
                 padding: "48px 0 24px 0" // Không gian đệm (whitespace) cao cấp
             }}
@@ -43,8 +44,8 @@ export default function Footer() {
                         </div>
                         
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--color-text)", letterSpacing: "-0.03em" }}>
-                                Smart<span style={{ color: "var(--color-primary)" }}>Travel</span>
+                            <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--color-text)", letterSpacing: 0 }}>
+                                D<span style={{ color: "var(--color-primary)" }}>Map</span>
                             </span>
                             
                             {/* Badge hiệu ứng lơ lửng (float) */}
@@ -59,7 +60,7 @@ export default function Footer() {
                                     borderRadius: "20px"
                                 }}
                             >
-                                AI-POWERED
+                                GoToEveryWhere
                             </span>
                         </div>
                     </div>
@@ -67,22 +68,7 @@ export default function Footer() {
                     {/* Danh sách liên kết xã hội (Dạng chữ để tránh lỗi icon) */}
                     <div style={{ display: "flex", gap: "24px" }}>
                         <a 
-                            href="https://twitter.com" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="hover-lift" 
-                            style={{ 
-                                color: "var(--color-text-soft)", 
-                                fontSize: "0.85rem", 
-                                fontWeight: 600,
-                                textDecoration: "none"
-                            }}
-                        >
-                            Twitter
-                        </a>
-
-                        <a 
-                            href="https://github.com" 
+                            href="https://github.com/DucPham-it/ComputationalThinkingHCMUS" 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="hover-lift" 
@@ -97,7 +83,7 @@ export default function Footer() {
                         </a>
 
                         <a 
-                            href="mailto:contact@smarttravel.com" 
+                            href="mailto:phamvoduc.it1905@gmail.com" 
                             className="hover-lift" 
                             style={{ 
                                 color: "var(--color-text-soft)", 
@@ -123,7 +109,7 @@ export default function Footer() {
                     gap: "16px"
                 }}>
                     <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--color-text-soft)", fontWeight: 500 }}>
-                        © {currentYear} SmartTravel App. All rights reserved.
+                        © {currentYear} Make By Group 3 - Computational Thinking - 24CTT3
                     </p>
 
                     {/* Credits ghi chú công nghệ */}
@@ -135,10 +121,9 @@ export default function Footer() {
                         color: "var(--color-muted)",
                         fontWeight: 500
                     }}>
-                        <span>Built with</span>
+                        <span>Build by Duc and </span>
                         {/* Trái tim dùng ký tự Unicode để thay cho icon Heart */}
-                        <span style={{ color: "#ef4444" }} className="pulse-soft">❤</span>
-                        <span>using React & FastAPI</span>
+                        <span style={{ color: "#ef4444" }} className="pulse-soft">Power Of GPT</span>
                     </div>
                 </div>
             </div>

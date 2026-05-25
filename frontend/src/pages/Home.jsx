@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Compass, LoaderCircle, Sparkles } from "lucide-react";
+import { ChevronDown, Coffee, Compass, LoaderCircle, MapPin, Navigation, Sparkles, Utensils, Users } from "lucide-react";
 
 import Section from "../components/common/Section";
 import SearchBar from "../components/common/SearchBar";
@@ -19,6 +19,13 @@ import { useAuth } from "../hooks/useAuth";
 import { useApp } from "../hooks/useApp";
 import { getCurrentBrowserLocation } from "../utils/geolocation";
 import { mergePlacesByKey } from "../utils/placeCollection";
+
+const QUICK_PROMPTS = [
+    { label: "Cafe chill", query: "cafe chill gần đây", icon: Coffee },
+    { label: "Ăn tối ngon", query: "nhà hàng ngon cho buổi tối", icon: Utensils },
+    { label: "Đi chơi nhóm", query: "địa điểm đi chơi với bạn bè", icon: Users },
+    { label: "Gần tôi", query: "địa điểm thú vị gần tôi", icon: MapPin },
+];
 
 /**
  * Màn hình Home (Trang chủ)
@@ -247,6 +254,11 @@ export default function Home() {
         await runRecommendationSearch(query, filterPayload);
     }
 
+    async function handleQuickPrompt(prompt) {
+        setQuery(prompt.query);
+        await runRecommendationSearch(prompt.query, buildRecommendationFilterPayload(filters));
+    }
+
     async function handleFilterApply(filterPayload) {
         await runRecommendationSearch(query, filterPayload);
     }
@@ -292,79 +304,63 @@ export default function Home() {
         <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
             
             {/* HERO BANNER: Giao diện tìm kiếm nổi bật */}
-            <section style={{
-                position: "relative",
-                padding: "80px 24px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                textAlign: "center",
-                background: "linear-gradient(135deg, var(--color-primary-soft) 0%, #f3e8ff 100%)",
-                borderBottom: "1px solid var(--color-border)",
-                marginBottom: "40px"
-            }}>
-                <div className="fade-in" style={{ maxWidth: "700px", width: "100%", zIndex: 1 }}>
-                    <div style={{ 
-                        display: "inline-flex", 
-                        alignItems: "center", 
-                        gap: "8px", 
-                        background: "rgba(255,255,255,0.6)", 
-                        padding: "6px 16px", 
-                        borderRadius: "20px",
-                        marginBottom: "20px",
-                        fontWeight: 600,
-                        color: "var(--color-primary)",
-                        backdropFilter: "blur(4px)"
-                    }}>
+            <section className="hero-panel travel-hero">
+                <div className="hero-copy fade-in">
+                    <div className="hero-eyebrow">
                         <Sparkles size={16} />
                         <span>Smart Travel Engine</span>
                     </div>
                     
-                    <h1 style={{ 
-                        fontSize: "clamp(2rem, 5vw, 3.5rem)", 
-                        fontWeight: 800, 
-                        color: "var(--color-text)",
-                        lineHeight: 1.1,
-                        marginBottom: "16px",
-                        letterSpacing: "-0.03em"
-                    }}>
-                        Discover your next <br />
-                        <span style={{ color: "var(--color-primary)" }}>perfect destination</span>
+                    <h1 className="hero-title">
+                        Find what ever you want to see
                     </h1>
                     
-                    <p style={{ 
-                        fontSize: "1.1rem", 
-                        color: "var(--color-text-soft)", 
-                        marginBottom: "32px",
-                        maxWidth: "500px",
-                        margin: "0 auto 32px auto"
-                    }}>
-                        Tell us what you're craving or where you want to explore. We'll curate the best spots just for you.
-                    </p>
                     {locationStatus ? (
-                        <p
-                            style={{
-                                margin: "0 auto 20px auto",
-                                maxWidth: "560px",
-                                color: "var(--color-text)",
-                                fontWeight: 600,
-                            }}
-                        >
+                        <p className="hero-status">
                             {locationStatus}
                         </p>
                     ) : null}
 
-                    <div style={{ 
-                        boxShadow: "0 20px 40px -10px rgba(37, 99, 235, 0.15)", 
-                        borderRadius: "16px" 
-                    }}>
+                    <div className="hero-search-card">
                         <SearchBar
                             value={query}
                             onChange={setQuery}
                             onSubmit={handleSearch}
                             disabled={!canUseChat}
                         />
+                    </div>
+                    <div className="quick-prompt-row" aria-label="Quick searches">
+                        {QUICK_PROMPTS.map((prompt) => (
+                            <button
+                                key={prompt.label}
+                                type="button"
+                                className="quick-prompt press"
+                                onClick={() => handleQuickPrompt(prompt)}
+                                disabled={!canUseChat || loading}
+                            >
+                                <prompt.icon size={16} />
+                                <span>{prompt.label}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="travel-cockpit" aria-label="Travel cockpit">
+                        <div className="cockpit-card">
+                            <MapPin size={18} />
+                            <span>{currentLocation ? "GPS Ready" : "GPS Pending"}</span>
+                        </div>
+                        <Link to="/map" className="cockpit-card">
+                            <Compass size={18} />
+                            <span>Map View</span>
+                        </Link>
+                        <Link to="/route" className="cockpit-card">
+                            <Navigation size={18} />
+                            <span>Route</span>
+                        </Link>
+                        <Link to="/social" className="cockpit-card">
+                            <Users size={18} />
+                            <span>Social</span>
+                        </Link>
                     </div>
                     {!canUseChat && (
                         <div
@@ -393,6 +389,7 @@ export default function Home() {
                         </div>
                     )}
                 </div>
+
             </section>
 
             {/* BỘ LỌC TÌM KIẾM */}

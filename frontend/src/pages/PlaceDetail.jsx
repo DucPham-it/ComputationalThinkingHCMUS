@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { MapPin, Phone, Star } from "lucide-react";
+import { CheckCircle, MapPin, Phone, Star } from "lucide-react";
 
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import Error from "../components/common/Error";
@@ -11,6 +11,7 @@ import { addFavorite } from "../services/favoriteService";
 import { fetchPlaceDetail } from "../services/placeService";
 import { recordPlacePick } from "../services/mapPickService";
 import { fetchReviews } from "../services/reviewService";
+import { recordVisitedPlace } from "../services/socialService";
 import { useApp } from "../hooks/useApp";
 import { formatRating } from "../utils/formatter";
 
@@ -104,6 +105,23 @@ export default function PlaceDetail() {
     }
   }
 
+  async function handleMarkVisited() {
+    if (!hasValidPlaceId) {
+      return;
+    }
+
+    try {
+      setActionError("");
+      setActionSuccess("");
+      await recordVisitedPlace({ place_id: numericPlaceId });
+      setActionSuccess("Place marked as visited. You can now create a post from Social.");
+    } catch (err) {
+      console.error("Failed to mark visited place", err);
+      const detail = err?.response?.data?.detail;
+      setActionError(detail || "We could not mark this place as visited. Please log in and try again.");
+    }
+  }
+
   function handleReviewSubmitted(result) {
     if (result?.latest_review) {
       setReviews((currentReviews) => [result.latest_review, ...currentReviews]);
@@ -149,10 +167,25 @@ export default function PlaceDetail() {
             >
               Save Place
             </button>
+            <button
+              className="btn-outline"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 16px",
+                borderRadius: "14px",
+                fontWeight: 700,
+              }}
+              onClick={handleMarkVisited}
+            >
+              <CheckCircle size={17} />
+              Mark Visited
+            </button>
           </div>
         }
       >
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="card dynamic-card place-detail-hero" style={{ padding: 0, overflow: "hidden" }}>
           {heroImage ? (
             <img
               src={heroImage}
@@ -177,7 +210,7 @@ export default function PlaceDetail() {
 
           <div style={{ padding: "24px", display: "grid", gap: "18px" }}>
             <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
-              <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <div className="card dynamic-card metric-card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
                 <Star size={18} fill="var(--color-accent)" color="var(--color-accent)" />
                 <div>
                   <strong style={{ display: "block" }}>{formatRating(place.rating)}</strong>
@@ -187,7 +220,7 @@ export default function PlaceDetail() {
                 </div>
               </div>
 
-              <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <div className="card dynamic-card metric-card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
                 <MapPin size={18} color="var(--color-primary)" />
                 <div>
                   <strong style={{ display: "block" }}>{place.primary_type || "Place"}</strong>
@@ -198,7 +231,7 @@ export default function PlaceDetail() {
               </div>
 
               {place.contact_phone ? (
-                <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+                <div className="card dynamic-card metric-card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
                   <Phone size={18} color="var(--color-primary)" />
                   <div>
                     <strong style={{ display: "block" }}>Contact</strong>

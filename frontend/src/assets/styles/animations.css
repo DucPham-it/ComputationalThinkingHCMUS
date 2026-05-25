@@ -16,6 +16,78 @@
     }
 }
 
+@keyframes atmosphericShift {
+    0% {
+        filter: saturate(1) hue-rotate(0deg);
+        transform: translate3d(0, 0, 0);
+    }
+    100% {
+        filter: saturate(1.16) hue-rotate(10deg);
+        transform: translate3d(0, -14px, 0);
+    }
+}
+
+@keyframes gridDrift {
+    0% {
+        background-position: 0 0, 0 0;
+    }
+    100% {
+        background-position: 46px 46px, 46px 46px;
+    }
+}
+
+@keyframes ambientPanelGlide {
+    0% {
+        filter: saturate(1);
+        transform: translate3d(-14px, -8px, 0) scale(1.02);
+    }
+    100% {
+        filter: saturate(1.18);
+        transform: translate3d(14px, 10px, 0) scale(1.04);
+    }
+}
+
+@keyframes routeNetworkDrift {
+    0% {
+        background-position: 0 0, 0 0, 0 0, 0 0;
+    }
+    100% {
+        background-position: 180px 120px, -160px 90px, 84px 0, 0 72px;
+    }
+}
+
+@keyframes sheen {
+    0% {
+        transform: translateX(-120%) skewX(-18deg);
+    }
+    100% {
+        transform: translateX(220%) skewX(-18deg);
+    }
+}
+
+@keyframes cardAccentFlow {
+    0% {
+        background-position: 0% 50%;
+    }
+    100% {
+        background-position: 240% 50%;
+    }
+}
+
+@keyframes cockpitSweep {
+    0% {
+        opacity: 0;
+        transform: translateX(-70%);
+    }
+    35% {
+        opacity: 0.9;
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(70%);
+    }
+}
+
 /* Biến thể xoay chậm cho các icon trang trí (ví dụ: la bàn) */
 .spin-slow {
     animation: spin 3s linear infinite;
@@ -29,7 +101,7 @@
 /* Fade In kèm hiệu ứng trượt nhẹ từ dưới lên (Slide Up) */
 .fade-in {
     /* Sử dụng forwards để giữ nguyên trạng thái ở frame cuối cùng (opacity: 1) */
-    animation: fadeIn 0.5s var(--ease-out-expo) forwards;
+    animation: fadeIn 0.64s var(--ease-out-expo) forwards;
     /* Tối ưu hóa phần cứng (Hardware Acceleration) */
     will-change: opacity, transform;
 }
@@ -94,8 +166,8 @@
 }
 
 .hover-lift:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 14px 28px -8px rgba(0, 0, 0, 0.12);
+    transform: translateY(-6px);
+    box-shadow: 0 24px 52px -18px rgba(15, 23, 42, 0.24);
 }
 
 /* ==========================================================================
@@ -165,4 +237,15 @@
     0% { transform: translateY(0px); }
     50% { transform: translateY(-8px); }
     100% { transform: translateY(0px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
 }

@@ -20,6 +20,7 @@ from app.api.routes import (
     recommendations,
     reviews,
     routes,
+    social,
     uploads,
     weather,
 )
@@ -47,6 +48,7 @@ app.include_router(favorites.router, prefix="/api/v1/favorites", tags=["favorite
 app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"])
 app.include_router(recommendation_picks.router, prefix="/api/v1/recommendations", tags=["recommendation-picks"])
 app.include_router(routes.router, prefix="/api/v1/routes", tags=["routes"])
+app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
 app.include_router(weather.router, prefix="/api/v1/weather", tags=["weather"])
 
 

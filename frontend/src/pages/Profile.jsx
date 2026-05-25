@@ -1,326 +1,262 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Camera, LogOut } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { MapPin, Settings, Share2, User, Users } from "lucide-react";
+
+import Empty from "../components/common/Empty";
+import Error from "../components/common/Error";
+import LoadingSpinner from "../components/common/LoadingSpinner";
+import SocialPostCard from "../components/social/SocialPostCard";
 import { useAuth } from "../hooks/useAuth";
-import { useApp } from "../hooks/useApp";
-import { updateProfile as updateProfileRequest } from "../services/authService";
-import { uploadAvatar } from "../services/uploadService";
+import { fetchMySocialProfile } from "../services/socialService";
+import ProfileSettings from "./ProfileSettings";
 
-/**
- * Profile completion/update page.
- *
- * Owner:
- * - Legacy/completed avatar upload behavior.
- * - Not part of TV7's current Review Rating Filter assignment.
- * - Existing auth/profile fields remain shared application flow.
- *
- * File input:
- * - Current user from useAuth.
- * - Profile form fields: first_name, last_name, birth_date, gender, address.
- * - Optional avatar file.
- *
- * File output:
- * - Updates profile through authService.
- * - Uploads avatar to Supabase Storage when selected.
- * - Updates auth user state with returned user payload.
- */
+function displayName(profileUser) {
+  const fullName = [profileUser?.first_name, profileUser?.last_name].filter(Boolean).join(" ");
+  return fullName || profileUser?.user_name || "Traveler";
+}
 
-const pageStyles = {
-  minHeight: "calc(100vh - 140px)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "32px 16px"
-};
-
-const formStyles = {
-  width: "min(100%, 760px)",
-  display: "grid",
-  gap: "20px"
-};
-
-const gridStyles = {
-  display: "grid",
-  gap: "16px",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
-};
-
-const labelStyles = {
-  display: "grid",
-  gap: "8px",
-  fontWeight: 600,
-  color: "var(--color-text)"
-};
-
-const statusStyles = {
-  padding: "12px 16px",
-  borderRadius: "12px",
-  textAlign: "center",
-  background: "rgba(239, 246, 255, 0.9)",
-  border: "1px solid rgba(37, 99, 235, 0.16)",
-  color: "var(--color-primary-dark)"
-};
-
-const submitStyles = {
-  width: "100%",
-  padding: "14px 18px",
-  borderRadius: "16px",
-  fontSize: "1rem",
-  fontWeight: 700
-};
-
-const logoutStyles = {
-  width: "100%",
-  padding: "14px 18px",
-  borderRadius: "16px",
-  fontSize: "1rem",
-  fontWeight: 700,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "8px"
-};
-
-function toOptionalValue(value) {
-  /**
-   * Owner:
-   * - Shared profile helper.
-   *
-   * Input:
-   * - value: raw form field value.
-   *
-   * Output:
-   * - trimmed string or null when empty.
-   */
-  const normalized = String(value || "").trim();
-  return normalized ? normalized : null;
+function initialTabFromSearch(search, hasCompletedProfile) {
+  const tab = new URLSearchParams(search).get("tab");
+  if (!hasCompletedProfile) return "settings";
+  return tab === "shared" || tab === "settings" ? tab : "posts";
 }
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, setUser, logout } = useAuth();
-  const { resetAppState } = useApp();
+  const location = useLocation();
+  const { user, isAuthenticated, hasCompletedProfile } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [activeTab, setActiveTab] = useState(() =>
+    initialTabFromSearch(location.search, hasCompletedProfile)
+  );
+  const [loading, setLoading] = useState(isAuthenticated);
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || "");
 
   useEffect(() => {
-    const token = window.localStorage.getItem("access_token");
-    if (!token) {
+    if (!isAuthenticated) {
       navigate("/login", { replace: true });
     }
-  }, [navigate]);
+  }, [isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (!avatarFile) {
-      setAvatarPreview(user?.avatar_url || "");
-      return undefined;
-    }
+    setActiveTab(initialTabFromSearch(location.search, hasCompletedProfile));
+  }, [hasCompletedProfile, location.search]);
 
-    const previewUrl = URL.createObjectURL(avatarFile);
-    setAvatarPreview(previewUrl);
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [avatarFile, user?.avatar_url]);
-
-  async function handleSubmit(event) {
-    /**
-     * Owner:
-     * - TV7 for avatar upload part.
-     *
-     * Input:
-     * - submit event from profile form.
-     * - avatarFile state if user selected a new avatar.
-     *
-     * Output:
-     * - profile data saved.
-     * - avatar uploaded and user.avatar_url updated when avatarFile exists.
-     * - redirects to home on success or sets error on failure.
-     */
-    event.preventDefault();
-    setError("");
-    setIsSubmitting(true);
-
-    const formData = new FormData(event.currentTarget);
-    const payload = {
-      first_name: String(formData.get("first_name") || "").trim(),
-      last_name: String(formData.get("last_name") || "").trim(),
-      birth_date: String(formData.get("birth_date") || "").trim(),
-      gender: toOptionalValue(formData.get("gender")),
-      address: toOptionalValue(formData.get("address"))
-    };
-
+  async function loadProfile() {
+    if (!isAuthenticated) return;
     try {
-      const auth = await updateProfileRequest(payload);
-      let nextUser = auth.user;
-      if (avatarFile) {
-        const avatar = await uploadAvatar(avatarFile);
-        nextUser = avatar.user;
-      }
-      setUser(nextUser);
-      navigate("/");
+      setLoading(true);
+      setError("");
+      const payload = await fetchMySocialProfile();
+      setProfile(payload);
     } catch (requestError) {
-      setError(
-        requestError?.response?.data?.detail ||
-          "Profile update failed. Please check your information and try again."
-      );
+      setError(requestError?.response?.data?.detail || "We couldn't load your profile right now.");
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   }
 
-  function handleAvatarChange(event) {
-    /**
-     * Owner:
-     * - TV7.
-     *
-     * Input:
-     * - event.target.files[0] from avatar input.
-     *
-     * Output:
-     * - avatarFile state and preview effect update.
-     */
-    const file = event.target.files?.[0] || null;
-    setAvatarFile(file);
+  useEffect(() => {
+    loadProfile();
+  }, [isAuthenticated]);
+
+  const profileUser = profile?.user || user || {};
+  const profileName = displayName(profileUser);
+  const profileInitial = profileName.slice(0, 1).toUpperCase();
+  const stats = profile?.stats || { post_count: 0, shared_count: 0, visited_count: 0 };
+
+  const visibleItems = useMemo(() => {
+    const items = profile?.items || [];
+    if (activeTab === "shared") {
+      return items.filter((item) => item.timeline_type === "share");
+    }
+    return items.filter((item) => item.timeline_type !== "share");
+  }, [activeTab, profile?.items]);
+
+  function handlePostUpdated(nextPost) {
+    setProfile((currentProfile) => {
+      if (!currentProfile) return currentProfile;
+      const nextItems = currentProfile.items
+        .map((item) => {
+          if (item.id !== nextPost.id) return item;
+          if (item.timeline_type === "share" && !nextPost.viewer_has_shared) {
+            return null;
+          }
+          return {
+            ...item,
+            ...nextPost,
+            timeline_type: item.timeline_type,
+            shared_at: item.shared_at,
+          };
+        })
+        .filter(Boolean);
+      return { ...currentProfile, items: nextItems };
+    });
   }
 
-  function handleLogout() {
-    logout();
-    resetAppState();
-    navigate("/login", { replace: true });
+  function handleSettingsSaved() {
+    setActiveTab("posts");
+    loadProfile();
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Empty
+        icon={User}
+        title="Sign in required"
+        message="Sign in before opening your profile."
+      />
+    );
+  }
+
+  if (loading && activeTab !== "settings") {
+    return <LoadingSpinner message="Loading your profile..." />;
+  }
+
+  if (error && activeTab !== "settings") {
+    return <Error message={error} />;
   }
 
   return (
-    <section style={pageStyles}>
-      <form className="card" style={formStyles} onSubmit={handleSubmit}>
-        <div>
-          <h1>Complete Profile</h1>
-          <p>
-            Finish your account with personal details. Gender and address are optional.
-          </p>
-        </div>
-
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          <span
+    <div style={{ display: "grid", gap: "20px" }}>
+      <section
+        className="card dynamic-card profile-hero-card"
+        style={{
+          display: "grid",
+          gap: "18px",
+          padding: "24px",
+        }}
+      >
+        <div style={{ display: "flex", gap: "18px", alignItems: "center", flexWrap: "wrap" }}>
+          <div
             style={{
-              width: "88px",
-              height: "88px",
+              width: "92px",
+              height: "92px",
               borderRadius: "50%",
-              background: avatarPreview
-                ? `url(${avatarPreview}) center/cover`
-                : "var(--color-primary-soft)",
+              background: profileUser.avatar_url
+                ? `url(${profileUser.avatar_url}) center/cover`
+                : "linear-gradient(135deg, #dbeafe 0%, #fef3c7 100%)",
+              border: "1px solid var(--color-border)",
               display: "grid",
               placeItems: "center",
               color: "var(--color-primary)",
-              border: "1px solid rgba(37, 99, 235, 0.18)",
+              fontSize: "2rem",
+              fontWeight: 900,
               flexShrink: 0,
             }}
           >
-            {avatarPreview ? null : <Camera size={28} />}
-          </span>
-          <span style={{ display: "grid", gap: "6px" }}>
-            Avatar
-            <input
-              name="avatar"
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              onChange={handleAvatarChange}
-              disabled={isSubmitting}
-            />
-          </span>
-        </label>
-
-        <div style={gridStyles}>
-          <label style={labelStyles}>
-            First Name
-            <input
-              name="first_name"
-              type="text"
-              placeholder="Nguyen"
-              autoComplete="given-name"
-              defaultValue={user?.first_name || ""}
-              required
-            />
-          </label>
-
-          <label style={labelStyles}>
-            Last Name
-            <input
-              name="last_name"
-              type="text"
-              placeholder="An"
-              autoComplete="family-name"
-              defaultValue={user?.last_name || ""}
-              required
-            />
-          </label>
-
-          <label style={labelStyles}>
-            Birth Day
-            <input
-              name="birth_date"
-              type="date"
-              autoComplete="bday"
-              defaultValue={user?.birth_date || ""}
-              required
-            />
-          </label>
-
-          <label style={labelStyles}>
-            Gender
-            <select name="gender" defaultValue={user?.gender || ""}>
-              <option value="">Prefer not to say</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-          </label>
+            {profileUser.avatar_url ? null : profileInitial}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h1 style={{ marginBottom: "6px" }}>{profileName}</h1>
+            <p style={{ marginBottom: 0, fontWeight: 700 }}>@{profileUser.user_name || user?.user_name}</p>
+            {profileUser.address ? (
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <MapPin size={16} />
+                {profileUser.address}
+              </p>
+            ) : null}
+          </div>
+          <Link
+            to="/social"
+            className="btn-primary"
+            style={{ padding: "12px 16px", borderRadius: "14px", fontWeight: 800 }}
+          >
+            Open Social
+          </Link>
         </div>
 
-        <label style={labelStyles}>
-          Address
-          <textarea
-            name="address"
-            rows={3}
-            placeholder="123 Nguyen Trai, District 5, Ho Chi Minh City"
-            autoComplete="street-address"
-            defaultValue={user?.address || ""}
-          />
-        </label>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+            gap: "12px",
+          }}
+        >
+          {[
+            ["Posts", stats.post_count],
+            ["Shared", stats.shared_count],
+            ["Visited", stats.visited_count],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="profile-stat-card"
+              style={{
+                padding: "14px 16px",
+                borderRadius: "16px",
+                background: "rgba(255, 255, 255, 0.72)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <strong style={{ display: "block", color: "var(--color-text)", fontSize: "1.35rem" }}>
+                {value}
+              </strong>
+              <span style={{ color: "var(--color-text-soft)", fontWeight: 700 }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
-        <button className="btn-primary" style={submitStyles} disabled={isSubmitting}>
-          {isSubmitting ? "Saving profile..." : "Save Profile"}
-        </button>
-
+      <div className="card" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         <button
           type="button"
-          className="btn-outline"
-          style={logoutStyles}
-          onClick={handleLogout}
-          disabled={isSubmitting}
+          className={activeTab === "posts" ? "btn-primary" : "btn-outline"}
+          style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderRadius: "12px", fontWeight: 800 }}
+          onClick={() => setActiveTab("posts")}
         >
-          <LogOut size={18} />
-          Logout
+          <Users size={17} />
+          Posts
         </button>
-
-        <Link
-          to="/admin"
-          className="btn-outline"
-          style={{ ...logoutStyles, textDecoration: "none" }}
+        <button
+          type="button"
+          className={activeTab === "shared" ? "btn-primary" : "btn-outline"}
+          style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderRadius: "12px", fontWeight: 800 }}
+          onClick={() => setActiveTab("shared")}
         >
-          Admin console / request admin
-        </Link>
+          <Share2 size={17} />
+          Shared
+        </button>
+        <button
+          type="button"
+          className={activeTab === "settings" ? "btn-primary" : "btn-outline"}
+          style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderRadius: "12px", fontWeight: 800 }}
+          onClick={() => setActiveTab("settings")}
+        >
+          <Settings size={17} />
+          Settings
+        </button>
+      </div>
 
-        {error ? <div style={statusStyles}>{error}</div> : null}
-      </form>
-    </section>
+      {activeTab === "settings" ? (
+        <ProfileSettings embedded onSaved={handleSettingsSaved} />
+      ) : visibleItems.length ? (
+        <div style={{ display: "grid", gap: "16px" }}>
+          {visibleItems.map((post) => (
+            <SocialPostCard
+              key={`${post.timeline_type}-${post.id}`}
+              post={post}
+              onPostUpdated={handlePostUpdated}
+            />
+          ))}
+        </div>
+      ) : (
+        <Empty
+          icon={activeTab === "shared" ? Share2 : Users}
+          title={activeTab === "shared" ? "No shared posts yet" : "No posts yet"}
+          message={
+            activeTab === "shared"
+              ? "Shared posts from the social feed will show up here."
+              : "Create a post from Social after completing a route."
+          }
+        />
+      )}
+    </div>
   );
 }

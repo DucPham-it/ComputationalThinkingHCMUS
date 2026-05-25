@@ -139,6 +139,74 @@
 | `sort_order` | `int4` |  |
 | `created_at` | `timestamptz` |  |
 
+## Table `social_post_comments`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `int8` | Primary |
+| `post_id` | `int8` |  |
+| `user_id` | `int8` |  |
+| `content` | `text` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `social_post_likes`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `int8` | Primary |
+| `post_id` | `int8` | Unique with user_id |
+| `user_id` | `int8` | Unique with post_id |
+| `created_at` | `timestamptz` |  |
+
+## Table `social_post_shares`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `int8` | Primary |
+| `post_id` | `int8` | Unique with user_id |
+| `user_id` | `int8` | Unique with post_id |
+| `created_at` | `timestamptz` |  |
+
+## Table `social_posts`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `int8` | Primary |
+| `user_id` | `int8` |  |
+| `place_id` | `int8` |  |
+| `visited_place_id` | `int8` | Nullable |
+| `content` | `text` |  |
+| `rating` | `int4` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `user_visited_places`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `int8` | Primary |
+| `user_id` | `int8` |  |
+| `place_id` | `int8` |  |
+| `route_origin` | `text` | Nullable |
+| `route_destination` | `text` | Nullable |
+| `distance_text` | `text` | Nullable |
+| `duration_text` | `text` | Nullable |
+| `distance_km` | `float8` | Nullable |
+| `duration_seconds` | `int4` | Nullable |
+| `travel_mode` | `text` | Nullable |
+| `visited_at` | `timestamptz` |  |
+
 ## Table `reviews`
 
 ### Columns
@@ -196,4 +264,3 @@
 | `avatar_url` | `text` |  Nullable |
 | `is_virtual` | `bool` |  |
 | `created_at` | `timestamptz` |  |
-

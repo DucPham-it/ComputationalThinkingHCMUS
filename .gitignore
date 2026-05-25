@@ -95,4 +95,5 @@ node_modules/
 
 # database/migrations/*.sql
 
-.codex.vs/ 
+.codex
+.vs/ 

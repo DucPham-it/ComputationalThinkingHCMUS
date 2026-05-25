@@ -1,0 +1,41 @@
+{
+    "origin": "Ben Thanh Market, Ho Chi Minh City",
+    "destination": "Vung Tau Beach, Ba Ria - Vung Tau",
+
+    "distance_text": "96 km",
+    "duration_text": "2 hr 14 mins",
+
+    "distance_km": 96.3,
+    "duration_seconds": 8040,
+
+    "path": [
+        {
+            "latitude": 10.7725,
+            "longitude": 106.6980
+        }
+    ],
+
+    "steps": [
+        {
+            "instruction": "Turn right onto Nguyen Hue",
+            "distance_text": "700 m",
+            "duration_text": "2 mins",
+
+            "geometry": [
+                [ 106.6992, 10.7720 ],
+                [ 106.7005, 10.7708 ]
+            ],
+
+            "maneuver_type": "turn",
+            "maneuver_modifier": "right",
+
+            "maneuver_location": [
+                106.6992,
+                10.7720
+            ],
+
+            "distance_meters": 700,
+            "duration_seconds": 120
+        }
+    ]
+}

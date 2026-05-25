@@ -14,6 +14,7 @@ import Login from "../pages/Login";
 import Register from "../pages/Register";
 import Profile from "../pages/Profile";
 import Admin from "../pages/Admin";
+import TestPerson6Map from "../pages/TestPerson6Map";
 
 export default function AppRoutes() {
   return (
@@ -28,6 +29,7 @@ export default function AppRoutes() {
       <Route path="/register" element={<Register />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/test-person-6" element={<TestPerson6Map />} />
     </Routes>
   );
 }

@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     supabase_storage_review_bucket: str = "review-images"
     supabase_storage_cache_control: str = "3600"
     database_url: str = Field(
-        default="sqlite:///./travel_catalog.db",
+        default=f"sqlite:///{Path(__file__).resolve().parents[2].as_posix()}/travel_catalog.db",
         validation_alias=AliasChoices("DATABASE_URL", "SUPABASE_DB_URL"),
     )
     database_ssl_require: bool = Field(

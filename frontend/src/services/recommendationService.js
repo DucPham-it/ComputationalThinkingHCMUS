@@ -7,11 +7,11 @@ import api from "./api";
  * - TV2: Recommendation search/filter UI.
  *
  * File input:
- * - SearchBar query, FilterPanel payload, and optional browser/map location.
+ * - SearchBar query, FilterPanel payload, và optional browser/map location.
  *
  * File output:
- * - Recommendation response for Home/usePlaces.
- * - No map-pick or route side effects live in this file.
+ * - Recommendation response cho Home/usePlaces.
+ * - Không có map-pick hoặc route side effects trong file này.
  */
 
 export const RECOMMENDATION_PAGE_SIZE = 10;
@@ -87,28 +87,23 @@ export function buildRecommendationFilterPayload(formValues = {}) {
   return payload;
 }
 
+/**
+ * Gọi GET /api/v1/recommendations với query + filter params.
+ *
+ * Owner: TV2.
+ *
+ * Input:
+ * - params.query:              free text query.
+ * - params.latitude/longitude: GPS hoặc map context.
+ * - params.entertainment_type, budget_level, companion_type,
+ *   start_time, max_distance_km, require_open_now, min_rating:
+ *   từ buildRecommendationFilterPayload.
+ *
+ * Output:
+ * - { items: PlaceSummary[] } với pagination support.
+ * - Mỗi item được truyền vào RecommendationList, MapView, và route pick flow.
+ */
 export async function fetchRecommendations(params) {
-  /**
-   * Owner:
-   * - TV2.
-   *
-   * Input:
-   * - params.query: free text query from user.
-   * - params.latitude/longitude: GPS or map context.
-   * - params.entertainment_type: category filter from UI or NLP override.
-   * - params.budget_level: low, medium, high.
-   * - params.companion_type: solo, couple, family, friends.
-   * - params.start_time: intended visit time.
-   * - params.max_distance_km: radius filter.
-   * - params.require_open_now: boolean.
-   * - params.min_rating: 0..5.
-   * - params.limit: page size for recommendations.
-   * - params.offset: ranked item offset for loading more.
-   *
-   * Output:
-   * - { items: PlaceSummary[], has_more, next_offset, limit, offset }.
-   * - each item is passed to RecommendationList, MapView, and route pick flow.
-   */
   const response = await api.get("/recommendations", { params });
   return response.data;
 }

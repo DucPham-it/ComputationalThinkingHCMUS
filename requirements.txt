@@ -8,3 +8,4 @@ sqlalchemy==2.0.43
 psycopg[binary]==3.3.3
 python-multipart==0.0.20
 pytest==8.4.2
+gTTS==2.5.4

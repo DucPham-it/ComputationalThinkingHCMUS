@@ -24,30 +24,44 @@ from app.services.geocoding_service import geocode_address
 
 router = APIRouter()
 
+# Giá trị mặc định của max_distance_km khi frontend không gửi lên.
+# Không lưu filter này vào history vì nó không phản ánh ý định tìm kiếm.
+_DEFAULT_MAX_DISTANCE_KM = 5.0
+
 
 def _build_history_query(query: str, filters: dict) -> str:
-    """Build searchable history text from natural-language input and filter-only searches.
+    """Build searchable history text từ natural-language input và filter-only searches.
 
-    Owner:
-    - TV1.
+    Owner: TV1.
 
     Input:
     - query: raw text typed by user. Can be empty.
-    - filters: explicit filter values from recommendation request, including
-      entertainment_type, budget_level, companion_type, start_time,
-      max_distance_km, require_open_now, min_rating.
+    - filters: dict các filter values. Chỉ truyền max_distance_km vào đây
+      khi user thực sự chọn (khác default), tránh lưu noise.
 
     Output:
     - compact text stored in user_search_history.query.
-    - returns query unchanged when user typed text.
-    - returns "key:value" pairs when user used only filters.
-    - returns empty string when there is nothing meaningful to store.
+    - Trả về query gốc khi user có nhập text.
+    - Trả về "key:value" pairs khi user chỉ dùng filter.
+    - Trả về empty string khi không có gì có ý nghĩa để lưu.
+
+    Examples:
+    - query="quán cà phê yên tĩnh", filters={} -> "quán cà phê yên tĩnh"
+    - query="", {"budget_level":"cheap","companion_type":"couple"}
+      -> "budget_level:cheap companion_type:couple"
+    - query="", filters={} -> ""
     """
     normalized_query = query.strip()
     if normalized_query:
         return normalized_query
 
-    filter_parts = [f"{key}:{value}" for key, value in filters.items() if value not in {None, "", False}]
+    # Lọc bỏ None, chuỗi rỗng, và False để không lưu filter không có ý nghĩa
+    meaningful_filters = {
+        key: value
+        for key, value in filters.items()
+        if value not in (None, "", False)
+    }
+    filter_parts = [f"{key}:{value}" for key, value in meaningful_filters.items()]
     return " ".join(filter_parts)
 
 
@@ -70,11 +84,9 @@ def get_recommendations(
 ) -> dict:
     """Recommendation list endpoint.
 
-    Owner:
-    - TV1.
+    Owner: TV1.
 
-    Input:
-    - query: natural-language search string from frontend
+        - query: natural-language search string from frontend
     - entertainment_type: explicit UI category filter, overrides NLP category
     - budget_level: low/medium/high filter
     - companion_type: solo/couple/family/friends preference
@@ -97,17 +109,18 @@ def get_recommendations(
       primary_type/category, photo_url/thumbnail, score, explanation if present.
 
     Side effects:
-    - stores query/filter text in user_search_history when meaningful.
-    - SearchHistoryRepository trims each user to max 80 rows.
+    - Lưu history khi có query text hoặc filter có ý nghĩa.
+    - Trim lịch sử về tối đa settings.max_search_history_per_user (80) dòng.
 
     Future extension:
-    - replace GET params with POST RecommendationQuery when filter UI is complete
-    - include per-place ranking explanation
+    - Thay GET params bằng POST RecommendationQuery khi filter UI hoàn chỉnh.
+    - Bổ sung per-place ranking explanation từ F4 (TV5).
     """
     user = UserRepository(db).get_by_id(current_user["id"])
     effective_latitude = latitude
     effective_longitude = longitude
 
+    # Fallback: nếu không có GPS từ frontend, geocode địa chỉ trong profile
     if (effective_latitude is None or effective_longitude is None) and user and user.address:
         geocoded_address = geocode_address(user.address, db=db)
         effective_latitude = geocoded_address.get("latitude")
@@ -116,6 +129,13 @@ def get_recommendations(
     safe_limit = min(max(int(limit or 10), 1), 30)
     safe_offset = max(int(offset or 0), 0)
 
+    # Chỉ đưa max_distance_km vào history khi user thực sự chọn (khác default)
+    distance_for_history = (
+        max_distance_km
+        if max_distance_km is not None and max_distance_km != _DEFAULT_MAX_DISTANCE_KM
+        else None
+    )
+
     history_query = _build_history_query(
         query,
         {
@@ -123,7 +143,7 @@ def get_recommendations(
             "budget_level": budget_level,
             "companion_type": companion_type,
             "start_time": start_time,
-            "max_distance_km": max_distance_km,
+            "max_distance_km": distance_for_history,
             "require_open_now": require_open_now,
             "min_rating": min_rating,
         },

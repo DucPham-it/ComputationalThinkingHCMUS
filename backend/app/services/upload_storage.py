@@ -19,7 +19,7 @@ File output:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
@@ -253,7 +253,6 @@ async def store_image_upload(
     - rejects empty uploads.
     - rejects files larger than settings.upload_max_bytes.
     """
-    del request
     extension = _extension_for(file)
     contents = await file.read(settings.upload_max_bytes + 1)
     if not contents:
@@ -274,15 +273,34 @@ async def store_image_upload(
     storage_path = _storage_path(owner_path, filename)
     content_type = file.content_type or "application/octet-stream"
 
-    await _upload_to_supabase_storage(
-        bucket=bucket,
-        path=storage_path,
-        content_type=content_type,
-        contents=contents,
-    )
+    # Check if Supabase is configured
+    configured_url = settings.supabase_url.strip().rstrip("/")
+    inferred_url = _infer_supabase_url_from_database_url().rstrip("/")
+    supabase_url = configured_url or inferred_url
+    storage_key = settings.supabase_service_role_key.strip()
+
+    if not supabase_url or not storage_key:
+        # Local storage fallback
+        storage_dir = Path(__file__).resolve().parents[2] / "storage" / namespace / owner_path
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        local_file_path = storage_dir / filename
+        with open(local_file_path, "wb") as f:
+            f.write(contents)
+        
+        base_url = str(request.base_url).rstrip("/")
+        url = f"{base_url}/storage/{namespace}/{owner_path}/{filename}"
+    else:
+        # Upload to Supabase
+        await _upload_to_supabase_storage(
+            bucket=bucket,
+            path=storage_path,
+            content_type=content_type,
+            contents=contents,
+        )
+        url = _public_url(supabase_url=supabase_url, bucket=bucket, path=storage_path)
 
     return StoredUpload(
-        url=_public_url(supabase_url=_supabase_url(), bucket=bucket, path=storage_path),
+        url=url,
         filename=filename,
         content_type=content_type,
         size_bytes=len(contents),

@@ -7,6 +7,9 @@ import MapContainer from "../components/map/MapContainer";
 import MarkerList from "../components/map/MarkerList";
 import RouteMap from "../components/map/RouteMap";
 import Section from "../components/common/Section";
+import UserPositionMarker from "../components/map/UserPositionMarker";
+import NavigationPanel from "../components/navigation/NavigationPanel";
+import useNavigationController from "../hooks/useNavigationController";
 import { useAuth } from "../hooks/useAuth";
 import { useApp } from "../hooks/useApp";
 import {
@@ -16,6 +19,7 @@ import { addFavorite } from "../services/favoriteService";
 import { recordPlacePick, resolvePlaceFromCoordinates } from "../services/mapPickService";
 import { getRoute } from "../services/routeService";
 import { recordVisitedPlace } from "../services/socialService";
+import { buildRouteDestinationFromMapPick } from "./MapView";
 
 const TRAVEL_MODES = [
   { value: "DRIVING", label: "Driving" },
@@ -93,6 +97,47 @@ function sanitizePickedPlace(place) {
   return cleanPlace;
 }
 
+/**
+ * Chuyển đổi định dạng các bước chỉ đường từ API backend sang cấu trúc chuẩn của frontend.
+ *
+ * Owner: Người 7 (TV7)
+ * Input: steps (Mảng các bước từ API)
+ * Output: Mảng các bước được chuẩn hóa tọa độ và thuộc tính hiển thị
+ */
+function mapRouteSteps(steps = []) {
+  return steps.map((step) => {
+    const geometryPoints = Array.isArray(step.geometry)
+      ? step.geometry.map((point) => {
+          if (Array.isArray(point) && point.length >= 2) {
+            return { lat: point[1], lng: point[0] };
+          }
+          return point;
+        })
+      : [];
+
+    let maneuverLocation = null;
+    if (Array.isArray(step.maneuver_location) && step.maneuver_location.length >= 2) {
+      maneuverLocation = {
+        lat: step.maneuver_location[1],
+        lng: step.maneuver_location[0],
+      };
+    }
+
+    return {
+      instruction: step.instruction,
+      instructions: step.instruction, // backward compatibility
+      distance: step.distance_text,
+      duration: step.duration_text,
+      geometry: geometryPoints,
+      maneuver_type: step.maneuver_type,
+      maneuver_modifier: step.maneuver_modifier,
+      maneuver_location: maneuverLocation,
+      distance_meters: step.distance_meters,
+      duration_seconds: step.duration_seconds,
+    };
+  });
+}
+
 export default function RouteView() {
   const navigate = useNavigate();
   const { isAuthenticated, hasCompletedProfile } = useAuth();
@@ -103,6 +148,7 @@ export default function RouteView() {
     setCurrentLocation,
     recommendationPlaces,
     setRecommendationPlaces,
+    hasSearched,
   } = useApp();
   const [travelMode, setTravelMode] = useState("DRIVING");
   const [originMode, setOriginMode] = useState(currentLocation ? "gps" : "manual");
@@ -121,6 +167,80 @@ export default function RouteView() {
   const [routeCompletionError, setRouteCompletionError] = useState("");
   const [locationNotice, setLocationNotice] = useState("");
   const [selectedPopupPlaceId, setSelectedPopupPlaceId] = useState(null);
+  const [mapCenter, setMapCenter] = useState(() => currentLocation || { latitude: 10.7769, longitude: 106.7009 });
+
+  const [inNavigationMode, setInNavigationMode] = useState(false);
+
+  /**
+   * Tính toán lại tuyến đường đi tự động khi GPS chệch hướng quá giới hạn.
+   *
+   * Owner: Người 7 (TV7)
+   * Input: gpsLocation (Tọa độ hiện tại của thiết bị)
+   * Output: Gọi API lấy route mới, cập nhật routeInfo để hiển thị và dẫn đường
+   */
+  const handleReroute = async (gpsLocation) => {
+    if (!destinationPoint && !destinationInput) return;
+    const originStr = `${gpsLocation.latitude},${gpsLocation.longitude}`;
+    const destStr = destinationPoint
+      ? `${destinationPoint.latitude},${destinationPoint.longitude}`
+      : destinationInput;
+
+    console.log("Rerouting from GPS coordinate:", originStr);
+    try {
+      const data = await getRoute({
+        origin: originStr,
+        destination: destStr,
+        travel_mode: travelMode.toLowerCase(),
+      });
+
+      const updatedRoute = {
+        origin: data.origin,
+        destination: data.destination,
+        distance: data.distance_text,
+        duration: data.duration_text,
+        distanceKm: data.distance_km,
+        durationSeconds: data.duration_seconds,
+        path: data.path || [],
+        steps: mapRouteSteps(data.steps),
+      };
+
+      setRouteInfo(updatedRoute);
+      setLocationNotice("Tuyến đường đã được cập nhật lại theo vị trí mới.");
+    } catch (err) {
+      console.error("Failed to auto-reroute:", err);
+      setLocationNotice("Tính toán lại tuyến đường thất bại.");
+    }
+  };
+
+  /**
+   * Xử lý hành vi khi người dùng đi đến đích thành công.
+   *
+   * Owner: Người 7 (TV7)
+   * Input: Không có
+   * Output: Hiển thị thông báo chúc mừng
+   */
+  const handleArrival = () => {
+    alert("Chúc mừng! Bạn đã đến đích an toàn.");
+  };
+
+  /**
+   * Xử lý kết thúc hành trình dẫn đường.
+   *
+   * Owner: Người 7 (TV7)
+   * Input: Không có
+   * Output: Tắt chế độ dẫn đường, cập nhật thông báo
+   */
+  const handleEndNavigation = () => {
+    setInNavigationMode(false);
+    setLocationNotice("Đã dừng chế độ dẫn đường.");
+  };
+
+  const navController = useNavigationController({
+    route: routeInfo,
+    onReroute: handleReroute,
+    onArrival: handleArrival,
+    onEnd: handleEndNavigation,
+  });
 
   useEffect(() => {
     if (selectedPlace?.address) {
@@ -132,10 +252,12 @@ export default function RouteView() {
       typeof selectedPlace.latitude === "number" &&
       typeof selectedPlace.longitude === "number"
     ) {
-      setDestinationPoint({
+      const coords = {
         latitude: selectedPlace.latitude,
         longitude: selectedPlace.longitude,
-      });
+      };
+      setDestinationPoint(coords);
+      setMapCenter(coords);
     }
   }, [selectedPlace]);
 
@@ -158,24 +280,21 @@ export default function RouteView() {
     let active = true;
 
     async function hydrateLocation() {
-      if (currentLocation) {
-        setOriginMode("gps");
-        setSelectionTarget("destination");
-        return;
-      }
-
       try {
         const browserLocation = await getCurrentBrowserLocation();
         if (!active) return;
         setCurrentLocation(browserLocation);
+        setMapCenter(browserLocation);
         setOriginMode("gps");
         setSelectionTarget("destination");
         setLocationNotice("Using your current GPS location as the default start point.");
       } catch (error) {
         if (!active) return;
-        setOriginMode("manual");
-        setSelectionTarget("origin");
-        setLocationNotice("GPS is unavailable. Pick the start point on the map or enter it manually.");
+        if (!currentLocation) {
+          setOriginMode("manual");
+          setSelectionTarget("origin");
+          setLocationNotice("GPS is unavailable. Pick the start point on the map or enter it manually.");
+        }
       }
     }
 
@@ -183,44 +302,16 @@ export default function RouteView() {
     return () => {
       active = false;
     };
-  }, [currentLocation, setCurrentLocation]);
+  }, [setCurrentLocation]);
 
   const canUseRoute = isAuthenticated && hasCompletedProfile;
-
-  const mapCenter = useMemo(() => {
-    if (selectionTarget === "destination" && destinationPoint) {
-      return destinationPoint;
-    }
-
-    if (originMode === "gps" && currentLocation) {
-      return currentLocation;
-    }
-
-    if (originPoint) {
-      return originPoint;
-    }
-
-    if (destinationPoint) {
-      return destinationPoint;
-    }
-
-    if (
-      selectedPlace &&
-      typeof selectedPlace.latitude === "number" &&
-      typeof selectedPlace.longitude === "number"
-    ) {
-      return { latitude: selectedPlace.latitude, longitude: selectedPlace.longitude };
-    }
-
-    return { latitude: 10.7769, longitude: 106.7009 };
-  }, [currentLocation, destinationPoint, originMode, originPoint, selectedPlace, selectionTarget]);
 
   const originForRequest =
     originMode === "gps" && currentLocation
       ? coordinatePointToRequest(currentLocation)
       : originPoint
-      ? coordinatePointToRequest(originPoint)
-      : originInput.trim();
+        ? coordinatePointToRequest(originPoint)
+        : originInput.trim();
 
   const destinationForRequest = destinationPoint
     ? coordinatePointToRequest(destinationPoint)
@@ -230,23 +321,29 @@ export default function RouteView() {
     originMode === "gps" && currentLocation
       ? formatCoordinatePoint(currentLocation)
       : originPoint
-      ? formatCoordinatePoint(originPoint)
-      : originInput || "Pick a point on the map or type it manually";
+        ? formatCoordinatePoint(originPoint)
+        : originInput || "Pick a point on the map or type it manually";
 
   const destinationSummary = destinationPoint
     ? formatCoordinatePoint(destinationPoint)
     : destinationInput || selectedPlace?.name || "Pick a place or click a destination on the map";
 
-  const routeFitBoundsPoints = useMemo(
-    () =>
-      [
-        ...(recommendationPlaces || []),
-        originMode === "gps" ? currentLocation : originPoint,
-        destinationPoint,
-        ...(routeInfo?.path || []),
-      ].filter(Boolean),
-    [currentLocation, destinationPoint, originMode, originPoint, recommendationPlaces, routeInfo]
-  );
+  const routeFitBoundsPoints = useMemo(() => {
+    // If a route is successfully calculated, fit the map to the entire route path
+    if (routeInfo?.path?.length) {
+      return routeInfo.path;
+    }
+
+    if (!hasSearched) {
+      return [];
+    }
+
+    // Otherwise, only fit bounds to the static recommendation places.
+    // We explicitly exclude originPoint, destinationPoint, and currentLocation here
+    // to prevent the map from annoyingly zooming out (fitBounds) when the user
+    // manually picks or confirms a point on the map.
+    return (recommendationPlaces || []).filter((p) => !p._isTemporaryMapSelection);
+  }, [hasSearched, recommendationPlaces, routeInfo]);
 
   if (!canUseRoute) {
     return (
@@ -272,40 +369,41 @@ export default function RouteView() {
 
   async function applyMapPoint(point, target) {
     setRouteError("");
+
+    // Optimistic UI update
+    const fallbackPlace = buildTemporaryMapPlace(point);
+    setRecommendationPlaces((previousPlaces) => {
+      const cleared = previousPlaces.filter((place) => !place._isTemporaryMapSelection);
+      return [fallbackPlace, ...cleared];
+    });
+    setSelectedPopupPlaceId(fallbackPlace.id);
+    setLocationNotice(
+      target === "origin"
+        ? "Map point previewed. Use Pick on map to confirm it as the start point."
+        : "Map point previewed. Use Pick on map to confirm it as the destination."
+    );
+
     try {
       const resolvedPlace = await resolvePlaceFromCoordinates({
         latitude: point.latitude,
         longitude: point.longitude,
       });
-      const alreadyListed = recommendationPlaces.some((place) => place.id === resolvedPlace.id);
-      const previewPlace = {
-        ...resolvedPlace,
-        _isTemporaryMapSelection: !alreadyListed,
-      };
-      const mergedPlaces = [
-        previewPlace,
-        ...recommendationPlaces.filter((place) => place.id !== resolvedPlace.id),
-      ];
-      setRecommendationPlaces(mergedPlaces);
-      setSelectedPopupPlaceId(previewPlace.id);
-      setLocationNotice(
-        target === "origin"
-          ? "Map point previewed. Use Pick on map to confirm it as the start point."
-          : "Map point previewed. Use Pick on map to confirm it as the destination."
-      );
-      return;
+      
+      setRecommendationPlaces((previousPlaces) => {
+        const filtered = previousPlaces.filter(
+          (place) => !place._isTemporaryMapSelection && place.id !== resolvedPlace.id && place.id !== fallbackPlace.id
+        );
+        const alreadyListed = previousPlaces.some((place) => place.id === resolvedPlace.id);
+        const previewPlace = {
+          ...resolvedPlace,
+          _isTemporaryMapSelection: !alreadyListed,
+        };
+        return [previewPlace, ...filtered];
+      });
+      setSelectedPopupPlaceId((prevId) => prevId === fallbackPlace.id ? resolvedPlace.id : prevId);
     } catch (error) {
-      const fallbackPlace = buildTemporaryMapPlace(point);
-      setRecommendationPlaces((previousPlaces) => [
-        fallbackPlace,
-        ...previousPlaces.filter((place) => place.id !== fallbackPlace.id),
-      ]);
-      setSelectedPopupPlaceId(fallbackPlace.id);
-      setLocationNotice(
-        target === "origin"
-          ? "Map point previewed manually. Use Pick on map to confirm it as the start point."
-          : "Map point previewed manually. Use Pick on map to confirm it as the destination."
-      );
+      console.error("Failed to resolve clicked point", error);
+      // Fallback is already showing
     }
   }
 
@@ -333,17 +431,24 @@ export default function RouteView() {
   async function handleConfirmMapSelection(place) {
     setSelectedPopupPlaceId(place.id);
     const resolvedPoint = coordinatePointFromPlace(place);
+    if (resolvedPoint) {
+      setMapCenter(resolvedPoint);
+    }
 
     if (selectionTarget === "origin") {
       setOriginMode("manual");
       setOriginPoint(resolvedPoint);
       setOriginInput(
         place.address ||
-          place.name ||
-          (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
+        place.name ||
+        (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
       );
-      setLocationNotice("Start point confirmed from the map.");
+      setLocationNotice("Start point confirmed from the map. Now pick the destination.");
       clearPreviewSelection(place);
+
+      // Automatically switch target to destination for better UX
+      setSelectionTarget("destination");
+
       return;
     }
 
@@ -353,12 +458,19 @@ export default function RouteView() {
       });
     }
 
-    setSelectedPlace(place._isLocalOnly ? null : sanitizePickedPlace(place));
+    let destination = null;
+    try {
+      destination = buildRouteDestinationFromMapPick(place);
+    } catch (error) {
+      console.warn("Could not build destination payload:", error);
+    }
+
+    setSelectedPlace(place._isLocalOnly ? null : destination);
     setDestinationPoint(resolvedPoint);
     setDestinationInput(
       place.address ||
-        place.name ||
-        (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
+      place.name ||
+      (resolvedPoint ? coordinatePointToRequest(resolvedPoint) : "")
     );
     setLocationNotice("Destination confirmed from the map.");
     clearPreviewSelection(place);
@@ -377,9 +489,9 @@ export default function RouteView() {
           previousPlaces.map((item) =>
             item.id === place.id
               ? {
-                  ...item,
-                  _isTemporaryMapSelection: false,
-                }
+                ...item,
+                _isTemporaryMapSelection: false,
+              }
               : item
           )
         );
@@ -415,12 +527,10 @@ export default function RouteView() {
         distanceKm: data.distance_km,
         durationSeconds: data.duration_seconds,
         path: data.path || [],
-        steps: (data.steps || []).map((step) => ({
-          instructions: step.instruction,
-          distance: step.distance_text,
-          duration: step.duration_text,
-        })),
+        steps: mapRouteSteps(data.steps),
       });
+      setRouteCompletionMessage("");
+      setRouteCompletionError("");
     } catch (error) {
       setRouteInfo(null);
       setRouteError(
@@ -467,6 +577,7 @@ export default function RouteView() {
     try {
       const browserLocation = await getCurrentBrowserLocation();
       setCurrentLocation(browserLocation);
+      setMapCenter(browserLocation);
       setOriginMode("gps");
       setOriginPoint(null);
       setOriginInput("");
@@ -485,10 +596,48 @@ export default function RouteView() {
   const destinationMarkerIcon = buildPointMarker("#7c3aed");
   const canCompleteRoute = routeInfo && typeof selectedPlace?.id === "number";
 
+  if (inNavigationMode) {
+    return (
+      <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
+        <MapContainer
+          navigationMode={true}
+          followPosition={navController.gpsPosition}
+          center={navController.gpsPosition || mapCenter}
+          zoom={17}
+          onRecenter={(pos) => setMapCenter(pos)}
+        >
+          {routeInfo?.steps?.length ? (
+            <RouteMap
+              navigationMode={true}
+              steps={routeInfo.steps}
+              currentStepIndex={navController.currentStepIndex}
+              path={routeInfo.path}
+            />
+          ) : null}
+
+          {navController.gpsPosition && (
+            <UserPositionMarker
+              position={navController.gpsPosition}
+              heading={navController.gpsHeading}
+              accuracy={navController.gpsAccuracy}
+            />
+          )}
+        </MapContainer>
+
+        {navController.navigationProps && (
+          <NavigationPanel
+            {...navController.navigationProps}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "grid", gap: "24px" }}>
       <Section
         title="Route Planner"
+        subtitle="Pan and zoom freely, preview any place on the map, then confirm it with Pick on map. Suggestion picks still become your destination by default."
       >
         <form className="card" onSubmit={handleRouteSubmit} style={{ display: "grid", gap: "18px" }}>
           <div style={{ display: "grid", gap: "12px" }}>
@@ -501,6 +650,9 @@ export default function RouteView() {
                 onClick={() => {
                   setOriginMode("gps");
                   setSelectedPopupPlaceId(null);
+                  if (currentLocation) {
+                    setMapCenter(currentLocation);
+                  }
                 }}
               >
                 Use GPS
@@ -513,6 +665,9 @@ export default function RouteView() {
                   setOriginMode("manual");
                   setSelectionTarget("origin");
                   setLocationNotice("Map is ready to confirm the next picked point as your start point.");
+                  if (originPoint) {
+                    setMapCenter(originPoint);
+                  }
                 }}
               >
                 Pick on map
@@ -524,6 +679,9 @@ export default function RouteView() {
                 onClick={() => {
                   setOriginMode("manual");
                   setSelectedPopupPlaceId(null);
+                  if (originPoint) {
+                    setMapCenter(originPoint);
+                  }
                 }}
               >
                 Enter manually
@@ -569,6 +727,9 @@ export default function RouteView() {
                 onClick={() => {
                   setSelectionTarget("destination");
                   setLocationNotice("Map is ready to confirm the next picked point as your destination.");
+                  if (destinationPoint) {
+                    setMapCenter(destinationPoint);
+                  }
                 }}
               >
                 Pick on map
@@ -577,7 +738,12 @@ export default function RouteView() {
                 type="button"
                 className="btn-outline"
                 style={{ padding: "10px 14px", borderRadius: "12px", fontWeight: 700 }}
-                onClick={() => setSelectionTarget("destination")}
+                onClick={() => {
+                  setSelectionTarget("destination");
+                  if (destinationPoint) {
+                    setMapCenter(destinationPoint);
+                  }
+                }}
               >
                 Pick place marker
               </button>
@@ -673,6 +839,7 @@ export default function RouteView() {
           zoom={13}
           onMapClick={handleMapClick}
           fitBoundsPoints={routeFitBoundsPoints}
+          onRecenter={(pos) => setMapCenter(pos)}
         >
           {recommendationPlaces?.length ? (
             <MarkerList
@@ -765,6 +932,23 @@ export default function RouteView() {
 
               <div style={{ display: "grid", gap: "10px" }}>
                 <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{
+                      padding: "12px 20px",
+                      borderRadius: "14px",
+                      fontWeight: 800,
+                      backgroundColor: "#16a34a",
+                      borderColor: "#16a34a"
+                    }}
+                    onClick={() => {
+                      setInNavigationMode(true);
+                      navController.actions.start();
+                    }}
+                  >
+                    Bắt đầu dẫn đường
+                  </button>
                   <button
                     type="button"
                     className="btn-primary"

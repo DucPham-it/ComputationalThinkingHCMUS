@@ -10,6 +10,7 @@
  */
 import MainLayout from "./layouts/MainLayout";
 import AppRoutes from "./routes/AppRoutes";
+import NavigationTestPage from './pages/NavigationTestPage';
 
 export default function App() {
   return (
@@ -18,3 +19,7 @@ export default function App() {
     </MainLayout>
   );
 }
+
+
+
+

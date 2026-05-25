@@ -297,6 +297,28 @@ Bàn giao cho nhóm trưởng:
 - Mô tả công thức điểm ban đầu.
 - 3 bộ demo: user mới, user có pick history, user có search history.
 
+Mô tả công thức điểm ban đầu:
+- `base_rating`: `rating * 1.5` để ưu tiên địa điểm có đánh giá cao.
+- `distance`: `max(0, 6 - distance_km) * 0.4` để ưu tiên địa điểm gần hơn.
+- `review`: `min(review_count / 20, 1.6)` để review count đóng góp vừa phải.
+- `query`: bonus khi tên/địa chỉ/type khớp query trực tiếp.
+- `address_match`: fallback khi query rỗng, khớp địa chỉ người dùng.
+- `search_history`: cộng điểm khi place phù hợp với recent_queries của user.
+- `pick_history`: cộng điểm khi place cùng type/khu vực/gần với picked_places.
+- `favorite`: cộng điểm nếu place nằm trong favorites của user.
+- `picked`: cộng điểm nếu place đã nằm trong picked_ids trước đó.
+- `preferred_type`: ưu tiên type trùng với filter hoặc lịch sử yêu thích.
+- `open_now`: ưu tiên địa điểm đang mở cửa.
+- `random_baseline`: dùng khi user mới, query rỗng và không có history;
+  seed ổn định để gợi ý vẫn có tính nhất quán.
+
+3 bộ demo:
+- User mới: `query=''` và không có `recent_queries`, `picked_places`, trả top 10 theo
+  rating/distance/review + random baseline ổn định.
+- User có pick history: truyền `picked_places` từ PickRepository, ưu tiên place cùng type
+  và gần khu vực user đã pick trước đó.
+- User có search history: truyền `recent_queries`, ưu tiên place khớp từ khóa search history.
+
 ---
 
 ## F5. Map Pick To Route

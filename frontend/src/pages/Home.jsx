@@ -53,7 +53,9 @@ export default function Home() {
     const {
         currentLocation,
         setCurrentLocation,
-        setRecommendationPlaces
+        setRecommendationPlaces,
+        hasSearched,
+        setHasSearched,
     } = useApp();
     const [query, setQuery] = useState("");
     const [places, setPlaces] = useState([]);
@@ -66,10 +68,6 @@ export default function Home() {
     const [hasMore, setHasMore] = useState(false);
     const [nextOffset, setNextOffset] = useState(null);
     const [lastSearchParams, setLastSearchParams] = useState(null);
-    
-    // State UX để đổi tiêu đề khi đã thực hiện tìm kiếm
-    const [hasSearched, setHasSearched] = useState(false);
-    
     // Ref dùng để tự động cuộn màn hình xuống kết quả tìm kiếm
     const resultsRef = useRef(null);
     const canUseChat = isAuthenticated && hasCompletedProfile;
@@ -185,7 +183,7 @@ export default function Home() {
             setNextOffset(null);
             setLastSearchParams(null);
         }
-    }, [canUseChat, setRecommendationPlaces]);
+    }, [canUseChat, setHasSearched, setRecommendationPlaces]);
 
     useEffect(() => {
         if (!canUseChat || query.trim()) {
@@ -239,6 +237,7 @@ export default function Home() {
         canUseChat,
         currentLocation,
         query,
+        setHasSearched,
         setRecommendationPlaces,
     ]);
 

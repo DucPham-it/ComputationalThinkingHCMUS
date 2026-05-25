@@ -23,12 +23,19 @@ from app.api.routes import (
     social,
     uploads,
     weather,
+    tts,
 )
 from app.core.config import settings
 from app.db.connection import check_database_connection
 from app.db.session import engine
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title=settings.app_name)
+
+# Mount local storage folder to serve uploaded files locally
+storage_dir = BACKEND_DIR / "storage"
+storage_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/storage", StaticFiles(directory=str(storage_dir)), name="storage")
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,6 +57,7 @@ app.include_router(recommendation_picks.router, prefix="/api/v1/recommendations"
 app.include_router(routes.router, prefix="/api/v1/routes", tags=["routes"])
 app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
 app.include_router(weather.router, prefix="/api/v1/weather", tags=["weather"])
+app.include_router(tts.router, prefix="/api/v1/tts", tags=["tts"])
 
 
 @app.get("/health")

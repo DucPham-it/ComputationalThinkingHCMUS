@@ -235,14 +235,14 @@ def recommend_places(
         favorite_repo = FavoriteRepository(db)
         pick_repo = PickRepository(db)
         favorite_places = favorite_repo.list_by_user(user_id, limit=12)
-        picked_places = pick_repo.list_by_user(user_id, limit=12)
-        picked_place_dicts = [_place_to_dict(place) for place in picked_places]
+        raw_picked_places = pick_repo.list_by_user(user_id, limit=12)
         recent_queries = SearchHistoryRepository(db).list_recent_queries(user_id, limit=12)
         saved_ids = [place.id for place in favorite_places]
-        picked_ids = [place.id for place in picked_places]
+        picked_ids = [place.id for place in raw_picked_places]
+        picked_place_dicts = [_place_to_dict(place) for place in raw_picked_places]
         history_preferred_types = [
             place.primary_type
-            for place in [*favorite_places, *picked_places]
+            for place in [*favorite_places, *raw_picked_places]
             if place.primary_type
         ]
         ranking_preferred_types = [*ranking_preferred_types, *history_preferred_types]

@@ -96,7 +96,7 @@ export default function useNavigationController(config = {}) {
    */
   const playVoice = useCallback((text) => {
     if (!text) return;
-    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "/api/v1";
     const url = `${apiBase}/tts?text=${encodeURIComponent(text)}`;
     const audio = new Audio(url);
     
@@ -226,10 +226,10 @@ export default function useNavigationController(config = {}) {
       remainingTime,
       onEnd: stopNavigation,
       isVoiceOn: isVoiceEnabled,
-      onToggleVoice: () => setIsVoiceEnabled(!isVoiceEnabled),
+      onToggleVoice: () => setIsVoiceEnabled((currentValue) => !currentValue),
       voiceControlled: true,
     };
-  }, [route, engine.totalDistanceRemaining, engine.currentStepIndex, stopNavigation]);
+  }, [route, engine.totalDistanceRemaining, engine.currentStepIndex, stopNavigation, isVoiceEnabled]);
 
   return {
     isTracking: gps.isTracking,

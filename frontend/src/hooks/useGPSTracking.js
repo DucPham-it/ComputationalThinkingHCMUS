@@ -93,6 +93,7 @@ export default function useGPSTracking(options = {}) {
       (err) => {
         console.error("GPS Tracking Error:", err);
         setError(err);
+        setIsTracking(false);
       },
       { enableHighAccuracy, timeout, maximumAge }
     );

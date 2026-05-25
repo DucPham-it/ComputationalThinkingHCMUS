@@ -135,6 +135,17 @@ def _storage_path(*parts: str) -> str:
     return str(PurePosixPath(*parts))
 
 
+def _local_storage_root() -> Path:
+    configured_dir = settings.local_storage_dir.strip()
+    if not configured_dir:
+        return Path(__file__).resolve().parents[2] / "storage"
+
+    storage_path = Path(configured_dir).expanduser()
+    if not storage_path.is_absolute():
+        storage_path = Path(__file__).resolve().parents[2] / storage_path
+    return storage_path
+
+
 def _quote_storage_path(path: str) -> str:
     return "/".join(quote(part, safe="") for part in path.split("/"))
 
@@ -281,7 +292,7 @@ async def store_image_upload(
 
     if not supabase_url or not storage_key:
         # Local storage fallback
-        storage_dir = Path(__file__).resolve().parents[2] / "storage" / namespace / owner_path
+        storage_dir = _local_storage_root() / namespace / owner_path
         storage_dir.mkdir(parents=True, exist_ok=True)
         local_file_path = storage_dir / filename
         with open(local_file_path, "wb") as f:

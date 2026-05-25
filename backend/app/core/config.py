@@ -1,15 +1,17 @@
 """Application settings."""
 
+import json
 from pathlib import Path
+from typing import Annotated, Any
 
-from pydantic import AliasChoices, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     app_name: str = "travel-recommendation-backend"
     app_env: str = "development"
-    app_port: int = 8000
+    app_port: int = Field(default=8000, validation_alias=AliasChoices("APP_PORT", "PORT"))
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
     osrm_base_url: str = "https://router.project-osrm.org"
     external_maps_user_agent: str = "computationalthinking-hcmus/1.0"
@@ -27,6 +29,10 @@ class Settings(BaseSettings):
     supabase_storage_place_bucket: str = "place-images"
     supabase_storage_review_bucket: str = "review-images"
     supabase_storage_cache_control: str = "3600"
+    local_storage_dir: str = Field(
+        default="",
+        validation_alias=AliasChoices("LOCAL_STORAGE_DIR", "STORAGE_DIR"),
+    )
     database_url: str = Field(
         default=f"sqlite:///{Path(__file__).resolve().parents[2].as_posix()}/travel_catalog.db",
         validation_alias=AliasChoices("DATABASE_URL", "SUPABASE_DB_URL"),
@@ -36,7 +42,25 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DATABASE_SSL_REQUIRE", "DB_SSL_REQUIRE"),
     )
     jwt_secret: str = "change_this_secret"
-    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+
+        raw_value = value.strip()
+        if not raw_value:
+            return []
+
+        if raw_value.startswith("["):
+            return json.loads(raw_value)
+
+        return [origin.strip() for origin in raw_value.split(",") if origin.strip()]
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parents[2] / ".env"),

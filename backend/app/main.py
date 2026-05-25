@@ -32,8 +32,20 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title=settings.app_name)
 
+
+def _resolve_storage_dir() -> Path:
+    configured_dir = settings.local_storage_dir.strip()
+    if not configured_dir:
+        return BACKEND_DIR / "storage"
+
+    storage_path = Path(configured_dir).expanduser()
+    if not storage_path.is_absolute():
+        storage_path = BACKEND_DIR / storage_path
+    return storage_path
+
+
 # Mount local storage folder to serve uploaded files locally
-storage_dir = BACKEND_DIR / "storage"
+storage_dir = _resolve_storage_dir()
 storage_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/storage", StaticFiles(directory=str(storage_dir)), name="storage")
 

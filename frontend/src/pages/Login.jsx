@@ -15,9 +15,20 @@ const statusStyles = {
   borderRadius: "12px",
   backgroundColor: "rgba(255, 255, 255, 0.92)",
   boxShadow: "0 12px 30px rgba(31, 41, 55, 0.12)",
-  color: "#a4b0f0",
+  color: "#7f1d1d",
   textAlign: "center"
 };
+
+function getLoginErrorMessage(error) {
+  if (!error?.response) {
+    return "Không kết nối được backend local. Hãy bật backend ở http://localhost:8000 rồi thử lại.";
+  }
+
+  return (
+    error.response.data?.detail ||
+    "Login failed. Please check your username/email and password."
+  );
+}
 
 
 export default function LoginView() {
@@ -44,10 +55,7 @@ export default function LoginView() {
       }
       navigate("/");
     } catch (requestError) {
-      setError(
-        requestError?.response?.data?.detail ||
-          "Login failed. Please check your username/email and password."
-      );
+      setError(getLoginErrorMessage(requestError));
     } finally {
       setIsSubmitting(false);
     }

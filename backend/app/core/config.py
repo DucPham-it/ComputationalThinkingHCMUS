@@ -46,6 +46,10 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+    cors_origin_regex: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("CORS_ORIGIN_REGEX", "CORS_REGEX"),
+    )
 
     @field_validator("cors_origins", mode="before")
     @classmethod

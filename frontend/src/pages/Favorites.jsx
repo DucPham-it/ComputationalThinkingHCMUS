@@ -58,10 +58,18 @@ export default function Favorites() {
   }
 
   function handlePick(place) {
+    let destination;
+    try {
+      destination = buildRouteDestinationFromMapPick(place);
+    } catch (e) {
+      alert("This place is missing coordinates. Cannot navigate to route.");
+      return;
+    }
+
     recordPlacePick(place.id).catch((err) => {
-      console.error("Failed to record place pick", err);
+      console.error("Failed to record place pick, proceeding to route anyway", err);
     });
-    setSelectedPlace(place);
+    setSelectedPlace(destination);
     navigate("/route");
   }
 

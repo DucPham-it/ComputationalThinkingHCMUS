@@ -14,6 +14,7 @@ import { fetchReviews } from "../services/reviewService";
 import { recordVisitedPlace } from "../services/socialService";
 import { useApp } from "../hooks/useApp";
 import { formatRating } from "../utils/formatter";
+import { buildRouteDestinationFromMapPick } from "./MapView";
 
 /**
  * Place detail page.
@@ -75,17 +76,24 @@ export default function PlaceDetail() {
       return;
     }
 
+    let destination;
+    try {
+      destination = buildRouteDestinationFromMapPick(place);
+    } catch (error) {
+      setActionError("This place is missing coordinates. Cannot navigate to route.");
+      return;
+    }
+
     try {
       setActionError("");
       setActionSuccess("");
       await recordPlacePick(numericPlaceId);
-      setSelectedPlace(place);
-      navigate("/route");
     } catch (err) {
-      console.error("Failed to record place pick", err);
-      const detail = err?.response?.data?.detail;
-      setActionError(detail || "We could not save this pick to your account. Please log in and try again.");
+      console.error("Failed to record place pick, proceeding to route anyway", err);
     }
+
+    setSelectedPlace(destination);
+    navigate("/route");
   }
 
   async function handleSavePlace() {

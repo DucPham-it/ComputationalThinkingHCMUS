@@ -18,6 +18,13 @@ class RouteStep(BaseModel):
     distance_text: str | None = None
     duration_text: str | None = None
 
+    geometry: list[list[float]] | None = None
+    maneuver_type: str | None = None
+    maneuver_modifier: str | None = None
+    maneuver_location: list[float] | None = None
+    distance_meters: float | None = None
+    duration_seconds: int | None = None
+
 
 class RoutePoint(BaseModel):
     latitude: float

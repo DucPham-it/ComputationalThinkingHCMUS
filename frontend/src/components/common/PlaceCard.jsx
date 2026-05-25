@@ -14,6 +14,7 @@ import { formatRating } from "../../utils/formatter";
 import { useApp } from "../../hooks/useApp";
 import { addFavorite } from "../../services/favoriteService";
 import { recordPlacePick } from "../../services/mapPickService";
+import { buildRouteDestinationFromMapPick } from "../../pages/MapView";
 
 function getNumericPlaceId(place) {
     const numericId = Number(place?.id);
@@ -58,16 +59,23 @@ export default function PlaceCard({ place }) {
         event.stopPropagation();
         setInteractionError("");
 
+        let destination;
+        try {
+            destination = buildRouteDestinationFromMapPick(place);
+        } catch (error) {
+            setInteractionError("This place is missing coordinates. Cannot navigate to route.");
+            return;
+        }
+
         if (numericPlaceId !== null) {
             try {
                 await recordPlacePick(numericPlaceId);
             } catch (error) {
-                console.error("Failed to record place pick", error);
-                setInteractionError("Picked for routing, but we could not save this interaction to your account.");
+                console.error("Failed to record place pick, proceeding to route anyway", error);
             }
         }
 
-        setSelectedPlace(place);
+        setSelectedPlace(destination);
         navigate("/route");
     }
 

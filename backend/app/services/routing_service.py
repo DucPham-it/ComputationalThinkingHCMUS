@@ -97,6 +97,29 @@ def _build_fallback_route(
                 "instruction": f"Go to {destination['name']}",
                 "distance_text": _format_distance(distance_km),
                 "duration_text": _format_duration(duration_seconds),
+                "geometry": [
+                    [
+                        round(origin["longitude"], 6),
+                        round(origin["latitude"], 6),
+                    ],
+                    [
+                        round(destination["longitude"], 6),
+                        round(destination["latitude"], 6),
+                    ],
+                ],
+
+                "maneuver_type": "depart",
+
+                "maneuver_modifier": None,
+
+                "maneuver_location": [
+                    round(origin["longitude"], 6),
+                    round(origin["latitude"], 6),
+                ],
+                    
+                "distance_meters": round(distance_km * 1000, 2),
+
+                "duration_seconds": duration_seconds,
             }
         ],
     }
@@ -183,16 +206,43 @@ def plan_route(
     total_distance_km = round(float(route.get("distance", 0.0)) / 1000, 2)
     total_duration_seconds = int(round(float(route.get("duration", 0.0))))
 
-    steps: list[dict[str, str]] = []
+    steps: list[dict[str, Any]] = []
     for leg in legs:
         for step in leg.get("steps") or []:
+            step_distance_meters = float(step.get("distance", 0.0))
             step_distance_km = float(step.get("distance", 0.0)) / 1000
             step_duration_seconds = int(round(float(step.get("duration", 0.0))))
+            maneuver = step.get("maneuver") or {}
+            step_geometry = (
+                step.get("geometry", {}).get("coordinates")
+                if isinstance(step.get("geometry"), dict)
+                else []
+            )
+            normalized_geometry = [
+                [float(point[0]), float(point[1])]
+                for point in step_geometry
+                if isinstance(point, list) and len(point) >= 2
+            ]
+            maneuver_location = maneuver.get("location") or []
+
             steps.append(
                 {
                     "instruction": _normalize_step(step),
                     "distance_text": _format_distance(step_distance_km),
                     "duration_text": _format_duration(step_duration_seconds),
+                    "geometry": normalized_geometry,
+                    "maneuver_type": maneuver.get("type"),
+                    "maneuver_modifier": maneuver.get("modifier"),
+                    "maneuver_location": (
+                        [
+                            float(maneuver_location[0]),
+                            float(maneuver_location[1]),
+                        ]
+                        if len(maneuver_location) >= 2
+                     else None
+                    ),
+                    "distance_meters": round(step_distance_meters, 2),
+                    "duration_seconds": step_duration_seconds,
                 }
             )
 
@@ -208,6 +258,18 @@ def plan_route(
                 "instruction": f"Go to {destination['name']}",
                 "distance_text": _format_distance(total_distance_km),
                 "duration_text": _format_duration(total_duration_seconds),
+                "geometry": [
+                    [round(origin["longitude"], 6), round(origin["latitude"], 6)],
+                    [round(destination["longitude"], 6), round(destination["latitude"], 6)],
+                ],
+                "maneuver_type": "depart",
+                "maneuver_modifier": None,
+                "maneuver_location": [
+                    round(origin["longitude"], 6),
+                    round(origin["latitude"], 6),
+                ],
+                "distance_meters": round(total_distance_km * 1000, 2),
+                "duration_seconds": total_duration_seconds,
             }
         ]
 

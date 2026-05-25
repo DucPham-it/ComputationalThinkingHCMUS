@@ -66,6 +66,7 @@ export function AppProvider({ children }) {
   const [recommendationPlaces, setRecommendationPlaces] = useState(
     storedState.recommendationPlaces
   );
+  const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -86,6 +87,7 @@ export function AppProvider({ children }) {
     setSelectedPlace(DEFAULT_APP_STATE.selectedPlace);
     setCurrentLocation(DEFAULT_APP_STATE.currentLocation);
     setRecommendationPlaces(DEFAULT_APP_STATE.recommendationPlaces);
+    setHasSearched(false);
 
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(APP_STATE_STORAGE_KEY);
@@ -100,9 +102,11 @@ export function AppProvider({ children }) {
       setCurrentLocation,
       recommendationPlaces,
       setRecommendationPlaces,
+      hasSearched,
+      setHasSearched,
       resetAppState
     }),
-    [currentLocation, recommendationPlaces, selectedPlace]
+    [currentLocation, recommendationPlaces, selectedPlace, hasSearched]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -55,15 +55,6 @@ def _match_bonus(text: str, terms: list[str], weight: float, cap: float) -> floa
     return min(cap, matches * weight)
 
 
-def _daily_variation(place_id: int | None) -> float:
-    if place_id is None:
-        return 0.0
-
-    seed = f"{place_id}-{date.today().isoformat()}".encode("utf-8")
-    digest = hashlib.sha256(seed).hexdigest()
-    return (int(digest[:4], 16) / 65535) * 0.8
-
-
 def _haversine_distance_km(
     latitude_a: float | None,
     longitude_a: float | None,
@@ -83,6 +74,15 @@ def _haversine_distance_km(
     a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return radius * c
+
+
+def _daily_variation(place_id: int | None) -> float:
+    if place_id is None:
+        return 0.0
+
+    seed = f"{place_id}-{date.today().isoformat()}".encode("utf-8")
+    digest = hashlib.sha256(seed).hexdigest()
+    return (int(digest[:4], 16) / 65535) * 0.8
 
 
 def compute_score(
@@ -114,6 +114,8 @@ def compute_score(
 
     Output:
     - tuple(score, score_parts).
+      score: numeric score rounded to 2 decimals.
+      score_parts: detailed contributions used for explanation.
     - score_parts is used by explain_score and the frontend explanation UI.
     """
     rating = float(place.get("rating") or 0)
@@ -139,6 +141,7 @@ def compute_score(
     address_bonus = _match_bonus(text_blob, address_terms, 0.6, 2.0) if not query_terms else 0.0
     search_history_bonus = score_from_search_history(place, recent_queries or [])
     pick_history_bonus = score_from_user_pick_history(place, picked_places or [])
+
     saved_bonus = 2.6 if place_id in set(saved_ids or []) else 0.0
     picked_bonus = 2.2 if place_id in set(picked_ids or []) else 0.0
     preferred_type_bonus = (
@@ -167,6 +170,7 @@ def compute_score(
         + open_bonus
         + random_bonus
     )
+    score = round(score, 2)
     score_parts = {
         "base_rating": round(base_rating, 2),
         "distance": round(distance_bonus, 2),
@@ -181,8 +185,7 @@ def compute_score(
         "open_now": round(open_bonus, 2),
         "random_baseline": round(random_bonus, 2),
     }
-    return round(score, 2), score_parts
-
+    return score, score_parts
 
 
 def rank_places(
@@ -210,7 +213,7 @@ def rank_places(
     - list sorted by recommendation score descending.
     - each item includes score, score_parts, and explanation.
     """
-    ranked = []
+    ranked: list[dict[str, Any]] = []
     for item in places:
         enriched = dict(item)
         score, score_parts = compute_score(
@@ -328,8 +331,9 @@ def score_from_search_history(place: dict[str, Any], recent_queries: list[str]) 
         ]
     )
     total_bonus = 0.0
-    for recent_query in recent_queries[:12]:
-        total_bonus += _match_bonus(text_blob, _tokenize(recent_query), 0.45, 1.1)
+    for query in recent_queries[:12]:
+        terms = _tokenize(query)
+        total_bonus += _match_bonus(text_blob, terms, 0.45, 1.1)
 
     return min(total_bonus, 2.2)
 
@@ -352,8 +356,7 @@ def explain_score(place: dict[str, Any]) -> dict[str, Any]:
     score_parts = {
         key: float(value)
         for key, value in place.items()
-        if key
-        in {
+        if key in {
             "query",
             "search_history",
             "pick_history",
@@ -377,7 +380,6 @@ def explain_score(place: dict[str, Any]) -> dict[str, Any]:
         key=lambda factor: factor["weight"],
         reverse=True,
     )
-
     summary = "Gợi ý phù hợp dựa trên điểm đánh giá và lịch sử của bạn."
     if any(factor["name"] == "pick_history" for factor in factors):
         summary = "Phù hợp với địa điểm bạn đã chọn trước đó."
@@ -386,7 +388,7 @@ def explain_score(place: dict[str, Any]) -> dict[str, Any]:
     elif any(factor["name"] == "favorite" for factor in factors):
         summary = "Ưu tiên theo nơi bạn đã yêu thích."
     elif any(factor["name"] == "random_baseline" for factor in factors):
-        summary = "Gợi ý hôm nay dựa trên lựa chọn ngẫu nhiên ổn định."
+        summary = "Gợi ý cho bạn hôm nay dựa trên lựa chọn ngẫu nhiên ổn định."
     elif any(factor["name"] == "query" for factor in factors):
         summary = "Khớp với nhu cầu tìm kiếm của bạn."
 

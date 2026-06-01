@@ -463,8 +463,8 @@ def parse_recommendation_language_contract(query: str) -> dict:
     Input / Output: unchanged from original.
 
     Change from original:
-    - Uses improved parse_search_text (3-layer matching).
-    - confidence accounts for match quality: rule > tfidf > fuzzy.
+    - Uses Gemini API (via gemini_service) for primary smart parsing.
+    - Falls back to improved parse_search_text (3-layer matching) if Gemini fails.
     """
     if not query or not query.strip():
         return {
@@ -483,6 +483,28 @@ def parse_recommendation_language_contract(query: str) -> dict:
             "match_method": "none",
         }
 
+    from app.services.gemini_service import parse_search_query_with_gemini
+    
+    # Try Gemini first
+    gemini_result = parse_search_query_with_gemini(query)
+    if gemini_result is not None:
+        return {
+            "intent": gemini_result.get("intent", "unknown"),
+            "entertainment_type": gemini_result.get("entertainment_type"),
+            "budget_level": gemini_result.get("budget_level"),
+            "companion_type": gemini_result.get("companion_type"),
+            "time_slot": gemini_result.get("time_slot"),
+            "location_hint": gemini_result.get("location_hint"),
+            "distance_hint_km": gemini_result.get("distance_hint_km"),
+            "require_open_now": bool(gemini_result.get("require_open_now")),
+            "min_rating": gemini_result.get("min_rating"),
+            "keywords": gemini_result.get("keywords", []),
+            "confidence": 0.95,
+            "missing_fields": [],
+            "match_method": "gemini",
+        }
+
+    # Fallback to local NLP rule-based parser
     base = parse_search_text(query)
     text = base.get("normalized_query", "")
     match_method: str = base.get("match_method", "none")

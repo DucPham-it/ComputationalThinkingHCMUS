@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     max_picked_places_per_user: int = 60
     max_search_history_per_user: int = 80
     upload_max_bytes: int = 5 * 1024 * 1024
+    gemini_api_key: str = ""
     supabase_url: str = ""
     supabase_service_role_key: str = Field(
         default="",

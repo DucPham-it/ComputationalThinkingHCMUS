@@ -47,23 +47,17 @@ function resolveMapPoint(point) {
   return [latitude, longitude];
 }
 
-// TODO: Component cập nhật view của map khi center hoặc zoom thay đổi (chỉ hoạt động ở mode bình thường)
 function MapUpdater({ center, zoom }) {
   const map = useMap();
+  const lat = center ? resolveCoordinate(center, "latitude", "lat") : null;
+  const lng = center ? resolveCoordinate(center, "longitude", "lng") : null;
 
   useEffect(() => {
-    if (!center) {
+    if (lat == null || lng == null) {
       return;
     }
-    map.setView(
-      [
-        resolveCoordinate(center, "latitude", "lat"),
-        resolveCoordinate(center, "longitude", "lng"),
-      ],
-      map.getZoom(),
-      { animate: true }
-    );
-  }, [center, map]);
+    map.setView([lat, lng], map.getZoom(), { animate: true });
+  }, [lat, lng, map]);
 
   return null;
 }
@@ -92,7 +86,8 @@ function MapBoundsUpdater({ points = [] }) {
       maxZoom: 14,
       padding: [32, 32],
     });
-  }, [boundsKey, boundsPoints, map]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boundsKey, map]);
 
   return null;
 }

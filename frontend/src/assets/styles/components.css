@@ -217,6 +217,26 @@
 }
 
 /* =========================================
+   MAP PAGE
+   ========================================= */
+
+.map-page-map {
+    --map-height: clamp(660px, calc(100vh - 180px), 860px);
+}
+
+@media (min-width: 1200px) {
+    .map-page-map {
+        --map-height: clamp(720px, calc(100vh - 170px), 920px);
+    }
+}
+
+@media (max-width: 768px) {
+    .map-page-map {
+        --map-height: 500px;
+    }
+}
+
+/* =========================================
    APP HERO & SECTIONS
    ========================================= */
 

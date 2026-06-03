@@ -10,7 +10,7 @@ import { useApp } from "../../hooks/useApp";
 
 const mapContainerStyle = {
   width: "100%",
-  height: "500px",
+  height: "var(--map-height, 500px)",
   borderRadius: "8px",
 };
 

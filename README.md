@@ -20,8 +20,7 @@ This project combines a `FastAPI` backend with a `React + Vite` frontend and use
   - `app/api/routes/`: các endpoint API cho auth, places, reviews, favorites, recommendations, routes, weather, place requests, admin
   - `app/services/`: logic tìm kiếm địa điểm từ database, geocoding/routing OSM và weather
   - `backend/requirements.txt`: các dependency Python
-- `split_places_csv.py`: script chạy thủ công ở root để tách CSV thô thành nhiều CSV theo bảng Supabase mới
-- `supabase_schema_reference.sql`: SQL tham chiếu để tạo bảng trên Supabase thủ công, không phải migration
+
 
 - `frontend/`: giao diện người dùng với `React` và `Vite`
   - `frontend/package.json`: script và dependency frontend

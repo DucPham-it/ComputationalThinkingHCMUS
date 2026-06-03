@@ -304,13 +304,14 @@ export default function MapView({ places = [] }) {
     };
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div className="map-page" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {/* Map */}
             <MapContainer
                 center={mapCenter}
                 zoom={13}
                 onMapClick={handleMapClick}
                 fitBoundsPoints={mapFitBoundsPoints}
+                mapContainerClassName="map-page-map"
                 onRecenter={(pos) => setMapCenter(pos)}
             >
                 {currentLocation ? (

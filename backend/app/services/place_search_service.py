@@ -101,10 +101,21 @@ def search_places(
         latitude=latitude,
         longitude=longitude,
     )
-    return [
+    
+    results = [
         _to_result_item(place, latitude=latitude, longitude=longitude)
         for place in local_places
     ]
+    
+    if not results and query.strip():
+        from app.services.geocoding_service import search_external_place
+        external_results = search_external_place(query.strip(), limit=5)
+        for ext_place in external_results:
+            if latitude is not None and longitude is not None:
+                ext_place["distance_km"] = _extract_distance_km(latitude, longitude, ext_place["latitude"], ext_place["longitude"])
+            results.append(ext_place)
+            
+    return results
 
 
 def resolve_place_from_coordinates(
@@ -116,32 +127,24 @@ def resolve_place_from_coordinates(
     if db is None:
         return None
 
-    place = PlaceRepository(db).find_nearest_place(
-        latitude=latitude,
-        longitude=longitude,
-        max_distance_km=settings.resolve_point_local_match_radius_km,
-    )
-    if place is None:
-        osm_point = reverse_geocode_coordinates(latitude, longitude)
-        if osm_point is None:
-            return None
-
+    osm_point = reverse_geocode_coordinates(latitude, longitude)
+    if osm_point is None:
         return {
-            "id": f"osm:{round(latitude, 6)}:{round(longitude, 6)}",
-            "name": osm_point["name"],
-            "address": osm_point["address"],
+            "id": f"point:{round(latitude, 6)}:{round(longitude, 6)}",
+            "name": "Điểm đã chọn",
+            "address": f"{latitude}, {longitude}",
             "external_place_id": None,
             "rating": None,
             "review_count": 0,
-            "latitude": osm_point["latitude"],
-            "longitude": osm_point["longitude"],
+            "latitude": latitude,
+            "longitude": longitude,
             "distance_km": 0.0,
             "price_level": None,
             "price_range": None,
             "open_now": None,
             "photo_url": None,
             "contact_phone": None,
-            "primary_type": "osm_point",
+            "primary_type": "point",
             "website": None,
             "description": None,
             "score": 0.0,
@@ -150,6 +153,27 @@ def resolve_place_from_coordinates(
             "is_local_only": True,
         }
 
-    item = _to_result_item(place, latitude=latitude, longitude=longitude)
-    item["score"] = round(max(0.0, 10.0 - (item.get("distance_km") or 0.0)), 2)
-    return item
+    return {
+        "id": f"osm:{round(latitude, 6)}:{round(longitude, 6)}",
+        "name": osm_point["name"],
+        "address": osm_point["address"],
+        "external_place_id": None,
+        "rating": None,
+        "review_count": 0,
+        "latitude": osm_point["latitude"],
+        "longitude": osm_point["longitude"],
+        "distance_km": 0.0,
+        "price_level": None,
+        "price_range": None,
+        "open_now": None,
+        "photo_url": None,
+        "contact_phone": None,
+        "primary_type": "osm_point",
+        "website": None,
+        "description": None,
+        "score": 0.0,
+        "can_view": False,
+        "can_save": False,
+        "is_local_only": True,
+    }
+

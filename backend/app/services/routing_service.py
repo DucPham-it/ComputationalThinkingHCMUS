@@ -61,6 +61,7 @@ def _resolve_location(raw_value: str, *, db) -> dict[str, Any] | None:
         "name": geocoded.get("formatted_address") or normalized_value,
         "latitude": float(latitude),
         "longitude": float(longitude),
+        "country_code": geocoded.get("country_code", ""),
     }
 
 
@@ -149,6 +150,8 @@ def plan_route(
     travel_mode: str = "driving",
     db=None,
 ) -> dict[str, Any] | None:
+    from app.services.geocoding_service import search_external_place
+    
     origin = _resolve_location(origin_text, db=db)
     destination = _resolve_location(destination_text, db=db)
     if origin is None or destination is None:
@@ -157,10 +160,41 @@ def plan_route(
     normalized_mode = (travel_mode or "driving").strip().lower()
     profile = OSRM_PROFILE_BY_MODE.get(normalized_mode, "driving")
     base_url = settings.osrm_base_url.rstrip("/")
-    coordinates = (
-        f"{origin['longitude']},{origin['latitude']};"
-        f"{destination['longitude']},{destination['latitude']}"
-    )
+    
+    lat1, lon1 = origin["latitude"], origin["longitude"]
+    lat2, lon2 = destination["latitude"], destination["longitude"]
+    
+    def is_vn_north(lat: float, lon: float) -> bool:
+        return 17.5 < lat < 24.0 and 102.0 < lon < 108.5
+
+    def is_vn_south(lat: float, lon: float) -> bool:
+        return 8.0 < lat < 15.0 and 104.0 < lon < 110.0
+
+    # Mặc định nối 2 điểm
+    coordinates = f"{lon1},{lat1};{lon2},{lat2}"
+    
+    country1 = origin.get("country_code", "")
+    country2 = destination.get("country_code", "")
+
+    if country1 and country2 and country1 != country2:
+        # Nếu khác quốc gia, tìm sân bay quốc tế gần đó ở quốc gia xuất phát
+        airports = search_external_place(f"international airport {origin['name']}", limit=1)
+        if not airports:
+            airports = search_external_place(f"airport {country1}", limit=1)
+        if airports:
+            airport = airports[0]
+            lat_air, lon_air = airport["latitude"], airport["longitude"]
+            coordinates = f"{lon1},{lat1};{lon_air},{lat_air}"
+            destination["name"] = f"Sân bay ({airport['name']}) để bay sang nước khác"
+            destination["latitude"] = lat_air
+            destination["longitude"] = lon_air
+            lat2, lon2 = lat_air, lon_air
+    elif country1 == "vn" and country2 == "vn":
+        # Heuristic: Nếu đi từ miền Bắc VN vào miền Nam VN (hoặc ngược lại)
+        # Ta chèn tọa độ Đà Nẵng làm trạm trung chuyển để ép tuyến đường đi dọc bờ biển Việt Nam.
+        if (is_vn_north(lat1, lon1) and is_vn_south(lat2, lon2)) or (is_vn_south(lat1, lon1) and is_vn_north(lat2, lon2)):
+            danang_lon, danang_lat = 108.2022, 16.0544
+            coordinates = f"{lon1},{lat1};{danang_lon},{danang_lat};{lon2},{lat2}"
 
     try:
         response = httpx.get(

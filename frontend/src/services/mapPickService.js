@@ -47,15 +47,35 @@ export async function resolvePlaceFromCoordinates({ latitude, longitude }) {
    *   { id, name, address, latitude, longitude, can_view, can_save,
    *     _canView, _canSave, _isLocalOnly }
    */
-  const response = await api.post("/places/resolve-point", {
-    latitude,
-    longitude,
-  });
-  const data = response.data;
-  return {
-    ...data,
-    _canView: data.can_view,
-    _canSave: data.can_save,
-    _isLocalOnly: data.is_local_only,
-  };
+  try {
+    const response = await api.post("/places/resolve-point", {
+      latitude,
+      longitude,
+    });
+    const data = response.data;
+    return {
+      ...data,
+      _canView: data.can_view,
+      _canSave: data.can_save,
+      _isLocalOnly: data.is_local_only,
+    };
+  } catch (error) {
+    console.warn("Lỗi khi gọi API resolve-point, sử dụng điểm dự phòng:", error);
+    const fallbackData = {
+      id: `fallback:${latitude}:${longitude}`,
+      name: "Điểm tùy chọn",
+      address: `${latitude}, ${longitude}`,
+      latitude,
+      longitude,
+      can_view: false,
+      can_save: false,
+      is_local_only: true,
+    };
+    return {
+      ...fallbackData,
+      _canView: fallbackData.can_view,
+      _canSave: fallbackData.can_save,
+      _isLocalOnly: fallbackData.is_local_only,
+    };
+  }
 }
